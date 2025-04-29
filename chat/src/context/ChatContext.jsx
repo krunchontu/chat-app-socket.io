@@ -22,6 +22,8 @@ const chatReducer = (state, action) => {
           msg.id === action.payload.id ? { ...msg, likes: action.payload.likes } : msg
         )
       };
+    case "SET_SOCKET":
+      return { ...state, socket: action.payload };
     default:
       return state;
   }
