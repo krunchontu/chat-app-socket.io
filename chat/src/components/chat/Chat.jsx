@@ -22,11 +22,15 @@ const ChatApp = () => {
   const { 
     state, 
     loadMoreMessages, 
+    // eslint-disable-next-line no-unused-vars
     editMessage, 
+    // eslint-disable-next-line no-unused-vars
     deleteMessage, 
     replyToMessage, 
+    // eslint-disable-next-line no-unused-vars
     toggleReaction,
     setReplyingTo,
+    // eslint-disable-next-line no-unused-vars
     clearError
   } = useChat();
   const { 
@@ -196,6 +200,7 @@ const ChatApp = () => {
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const handleLike = (id) => {
     // Only allow if socket is connected
     if (socket && isConnected) {
@@ -204,7 +209,7 @@ const ChatApp = () => {
     }
   };
   
-  // Check if user has liked a message
+  // eslint-disable-next-line no-unused-vars
   const hasUserLiked = (message) => {
     return user && message.likedBy && message.likedBy.includes(user.id);
   };
@@ -306,14 +311,12 @@ const ChatApp = () => {
               <h3 id="online-users-heading">Online Users ({onlineUsers?.length || 0})</h3>
               <ul 
                 className="online-users-list"
-                role="list"
                 aria-label="List of online users"
               >
                 {onlineUsers?.map(user => (
                   <li 
                     key={user.id} 
                     className="online-user"
-                    role="listitem"
                   >
                     <div className="user-circle" aria-hidden="true">
                       <span>{user.username[0].toUpperCase()}</span>
@@ -327,7 +330,7 @@ const ChatApp = () => {
                   </li>
                 ))}
                 {(!onlineUsers || onlineUsers.length === 0) && (
-                  <li className="no-users" role="listitem">No users online</li>
+                  <li className="no-users">No users online</li>
                 )}
               </ul>
             </section>
