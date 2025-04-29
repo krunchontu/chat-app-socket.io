@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'
+        cache: 'npm'
+        cache-dependency-path: 'chat/package-lock.json'
+    
+    - name: Install dependencies
+      run: cd chat && npm ci
+    
+    - name: Run linter
+      run: cd chat && npm run lint || echo "Linting issues found"
+      
+    - name: Run tests
+      run: cd chat && npm test -- --coverage
+      
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: chat/coverage/

@@ -1,70 +1,159 @@
-# Getting Started with Create React App
+# Chat Application
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A real-time chat application built with React, Socket.IO, and Node.js.
 
-## Available Scripts
+## Features
 
-In the project directory, you can run:
+- Real-time messaging with Socket.IO
+- User authentication and authorization
+- Message editing and deletion
+- Message reactions and replies
+- Dark/light theme support
+- Offline status detection
+- Progressive Web App (PWA) support
+- Browser notifications
+- Error boundary protection
 
-### `npm start`
+## Getting Started
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+### Prerequisites
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+- Node.js (v14+)
+- npm or yarn
 
-### `npm test`
+### Installation
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+1. Clone the repository
+2. Install dependencies for both client and server:
 
-### `npm run build`
+```bash
+# Install client dependencies
+cd chat
+npm install
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+# Install server dependencies
+cd ../server
+npm install
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+3. Create `.env` files by copying from examples:
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+# Client environment variables
+cd chat
+cp .env.example .env
 
-### `npm run eject`
+# Server environment variables
+cd ../server
+cp .env.example .env
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+4. Start the development servers:
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```bash
+# Start client
+cd chat
+npm start
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+# Start server (in a different terminal)
+cd server
+npm start
+```
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+## Testing
 
-## Learn More
+The application includes comprehensive unit tests for critical components. Run the tests with:
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+```bash
+cd chat
+npm test
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+Major tested components include:
+- ChatContext: Socket connection, message operations
+- ThemeContext: Theme switching functionality
+- App: Routing and error boundaries
+- Chat component: UI rendering and message handling
+- MessageActions: Message operations (edit, delete, reaction)
 
-### Code Splitting
+## Continuous Integration
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+This project uses GitHub Actions for CI. The workflow:
+- Runs on every push and pull request to main/master branches
+- Installs dependencies
+- Runs linter checks
+- Executes unit tests
+- Generates and uploads a coverage report
 
-### Analyzing the Bundle Size
+## Project Structure
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+```
+chat/
+├── public/             # Static files
+├── src/
+│   ├── components/     # React components
+│   │   ├── auth/       # Authentication components
+│   │   ├── chat/       # Chat-related components
+│   │   └── common/     # Shared components
+│   ├── context/        # React context providers
+│   ├── services/       # Service modules
+│   └── utils/          # Utility functions
+└── server/
+    ├── config/         # Server configuration
+    ├── controllers/    # Request handlers
+    ├── middleware/     # Express middleware
+    ├── models/         # Database models
+    └── routes/         # API routes
+```
 
-### Making a Progressive Web App
+## Code Architecture
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+### Client Architecture
 
-### Advanced Configuration
+The client is built using React with context-based state management:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+- **Context Providers**:
+  - `AuthContext`: Manages user authentication state
+  - `ChatContext`: Handles messaging with socket connections
+  - `ThemeContext`: Controls theme preferences
 
-### Deployment
+- **Key Components**:
+  - `App`: Main component with routing and error boundaries
+  - `Chat`: Main chat interface, message display
+  - `MessageList`: Renders chat messages (extracted from Chat for better code organization)
+  - `MessageActions`: UI for message operations (edit, delete, react)
+  - `HeaderComponent`: Navigation and app controls
+  - `ErrorBoundary`: Catches and handles runtime errors
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+### Server Architecture
 
-### `npm run build` fails to minify
+The server uses Express.js with Socket.IO for real-time communication:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- **API Routes**: RESTful endpoints for authentication and data retrieval
+- **Socket Events**: Real-time messaging and notifications
+- **Database Models**: User and message schemas
+- **Middleware**: Authentication, validation, and rate limiting
+
+## Future Improvements
+
+### UX Enhancements
+- Implement loading skeletons instead of spinners for better perceived performance
+- Add keyboard shortcuts for common actions
+- Improve mobile responsiveness for message actions
+- Add read receipts functionality
+- Implement message threading for better conversation flow
+
+### Technical Improvements
+- Add end-to-end testing with Cypress
+- Implement WebRTC for audio/video chat
+- Add file upload capabilities
+- Implement message search functionality
+- Add support for markdown in messages
+
+## Contributors
+
+- [Your Name](https://github.com/yourusername)
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

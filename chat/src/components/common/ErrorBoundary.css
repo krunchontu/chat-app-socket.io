@@ -1,0 +1,125 @@
+/**
+ * Styles for the ErrorBoundary component and its fallback UI
+ * Designed for clear error visualization with accessible contrasts
+ */
+
+.error-boundary-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  margin: 1rem;
+  background-color: #fdeded;
+  border-left: 4px solid #f56565;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  color: #2d3748;
+  max-width: 600px;
+  width: 90%;
+  margin: 2rem auto;
+}
+
+.error-icon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.error-boundary-fallback h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 1rem 0;
+  color: #e53e3e;
+}
+
+.error-message {
+  text-align: center;
+  font-size: 1.1rem;
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.error-reset-btn {
+  background-color: #e53e3e;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.error-reset-btn:hover {
+  background-color: #c53030;
+}
+
+.error-reset-btn:focus {
+  outline: 3px solid #fed7d7;
+  outline-offset: 2px;
+}
+
+.error-reset-btn:active {
+  transform: scale(0.98);
+}
+
+/* Dark theme support */
+@media (prefers-color-scheme: dark) {
+  .error-boundary-fallback {
+    background-color: #2d3748;
+    color: #e2e8f0;
+    border-left-color: #f56565;
+  }
+  
+  .error-boundary-fallback h3 {
+    color: #fc8181;
+  }
+  
+  .error-reset-btn {
+    background-color: #fc8181;
+  }
+  
+  .error-reset-btn:hover {
+    background-color: #f56565;
+  }
+  
+  .error-reset-btn:focus {
+    outline-color: #742a2a;
+  }
+}
+
+/* Responsive design */
+@media (max-width: 480px) {
+  .error-boundary-fallback {
+    padding: 1.5rem;
+    width: 95%;
+  }
+  
+  .error-icon {
+    font-size: 2rem;
+  }
+  
+  .error-boundary-fallback h3 {
+    font-size: 1.25rem;
+  }
+  
+  .error-message {
+    font-size: 1rem;
+  }
+  
+  .error-reset-btn {
+    padding: 0.6rem 1.2rem;
+  }
+}
+
+/* Accessibility - high contrast mode support */
+@media (forced-colors: active) {
+  .error-boundary-fallback {
+    border: 2px solid CanvasText;
+  }
+  
+  .error-reset-btn {
+    border: 1px solid CanvasText;
+  }
+}

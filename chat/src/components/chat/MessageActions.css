@@ -1,0 +1,242 @@
+/**
+ * MessageActions component styles
+ * Provides UI styling for message editing, deleting, replying, and reactions
+ */
+
+.message-actions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+/* Action buttons layout */
+.message-actions-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.message-action-button {
+  background: none;
+  border: none;
+  padding: 4px;
+  font-size: 16px;
+  cursor: pointer;
+  color: #b9bbbe;
+  opacity: 0.7;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.message-action-button:hover {
+  opacity: 1;
+  background-color: rgba(79, 84, 92, 0.32);
+}
+
+.message-action-button:focus-visible {
+  outline: 2px solid #5865f2;
+  opacity: 1;
+}
+
+/* Dropdown menus */
+.more-actions-container,
+.reaction-button-container {
+  position: relative;
+  display: inline-block;
+}
+
+.actions-menu,
+.reactions-menu {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 8px;
+  background-color: #36393f;
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24);
+  z-index: 10;
+  overflow: hidden;
+  min-width: 100px;
+}
+
+.actions-menu {
+  display: flex;
+  flex-direction: column;
+}
+
+.reactions-menu {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 4px;
+  width: 200px;
+}
+
+.action-option {
+  padding: 8px 12px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #dcddde;
+  cursor: pointer;
+  width: 100%;
+  transition: background-color 0.2s ease;
+}
+
+.action-option:hover {
+  background-color: rgba(79, 84, 92, 0.32);
+}
+
+.action-delete {
+  color: #f04747;
+}
+
+.action-delete:hover {
+  background-color: rgba(240, 71, 71, 0.1);
+}
+
+.reaction-option {
+  padding: 6px;
+  font-size: 20px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reaction-option:hover {
+  background-color: rgba(79, 84, 92, 0.32);
+  transform: scale(1.1);
+}
+
+/* Message editing */
+.message-edit-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.message-edit-input {
+  background-color: #40444b;
+  color: #dcddde;
+  border: none;
+  border-radius: 4px;
+  padding: 10px;
+  font-family: inherit;
+  font-size: 1rem;
+  min-height: 80px;
+  resize: vertical;
+}
+
+.message-edit-input:focus {
+  outline: 2px solid #5865f2;
+}
+
+.message-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.message-edit-save,
+.message-edit-cancel {
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.message-edit-save {
+  background-color: #5865f2;
+  color: white;
+}
+
+.message-edit-save:hover:not(:disabled) {
+  background-color: #4752c4;
+}
+
+.message-edit-save:disabled {
+  background-color: #4f545c;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.message-edit-cancel {
+  background-color: #4f545c;
+  color: white;
+}
+
+.message-edit-cancel:hover {
+  background-color: #3b3d44;
+}
+
+/* Message deleted state */
+.message-deleted {
+  font-style: italic;
+  color: #72767d;
+  font-size: 0.9em;
+  padding: 4px;
+}
+
+/* Reactions display */
+.message-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.reaction-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background-color: rgba(79, 84, 92, 0.32);
+  border-radius: 12px;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.reaction-badge:hover {
+  background-color: rgba(79, 84, 92, 0.56);
+}
+
+.reaction-badge.reacted {
+  background-color: rgba(88, 101, 242, 0.24);
+  border: 1px solid rgba(88, 101, 242, 0.4);
+}
+
+.reaction-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: #dcddde;
+}
+
+/* Keyboard focus styles */
+.action-option:focus-visible,
+.reaction-option:focus-visible,
+.reaction-badge:focus-visible,
+.message-edit-save:focus-visible,
+.message-edit-cancel:focus-visible {
+  outline: 2px solid #5865f2;
+  outline-offset: 2px;
+}
+
+/* Responsive styles */
+@media (max-width: 576px) {
+  .reactions-menu {
+    width: 150px;
+  }
+  
+  .reaction-option {
+    font-size: 16px;
+  }
+}

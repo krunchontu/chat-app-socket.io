@@ -1,0 +1,21 @@
+const mongoose = require("mongoose");
+
+// Function to connect to MongoDB
+const connectDB = async () => {
+  try {
+    const conn = await mongoose.connect(process.env.MONGODB_URI, {
+      // Mongoose 6+ doesn't need these options anymore
+      // But I'm keeping them as comments for reference
+      // useNewUrlParser: true,
+      // useUnifiedTopology: true,
+    });
+
+    console.log(`MongoDB Connected: ${conn.connection.host}`);
+    return conn;
+  } catch (error) {
+    console.error(`Error connecting to MongoDB: ${error.message}`);
+    process.exit(1);
+  }
+};
+
+module.exports = connectDB;

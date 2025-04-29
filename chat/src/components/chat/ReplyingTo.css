@@ -1,0 +1,82 @@
+/**
+ * ReplyingTo component styles
+ * Displays the message being replied to with styling
+ */
+
+.replying-to-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: rgba(79, 84, 92, 0.16);
+  border-left: 4px solid #5865f2;
+  border-radius: 3px;
+  margin-bottom: 6px;
+  padding: 8px 12px;
+}
+
+.replying-to-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.replying-to-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #b9bbbe;
+  font-size: 0.8rem;
+}
+
+.replying-username {
+  color: #5865f2;
+  font-weight: 600;
+}
+
+.replying-message-text {
+  color: #dcddde;
+  font-size: 0.9rem;
+  opacity: 0.9;
+  word-break: break-word;
+  /* Limit to single line with ellipsis */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: calc(100% - 30px);
+}
+
+.cancel-reply-button {
+  background: none;
+  border: none;
+  color: #b9bbbe;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.cancel-reply-button:hover {
+  background-color: rgba(79, 84, 92, 0.32);
+  color: #ffffff;
+}
+
+.cancel-reply-button:focus-visible {
+  outline: 2px solid #5865f2;
+  outline-offset: 2px;
+}
+
+/* Responsive styles */
+@media (max-width: 576px) {
+  .replying-to-container {
+    padding: 6px 8px;
+  }
+  
+  .replying-message-text {
+    max-width: calc(100% - 40px);
+  }
+}
