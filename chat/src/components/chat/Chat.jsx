@@ -1,14 +1,13 @@
-import React, { useState, useEffect } from "react";
-import socketIo from "socket.io-client";
+import React, { useState } from "react";
+import { useChat } from "../../context/ChatContext";
 import Picker from "emoji-picker-react";
-import "./Chat.css"; // Import CSS styles
-const userList = ["Alan", "Bob", "Carol", "Dean", "Elin"];
-let socket;
+import "./Chat.css";
 
-const ENDPOINT = "http://localhost:4500/";
+const userList = ["Alan", "Bob", "Carol", "Dean", "Elin"];
 
 const ChatApp = () => {
-  const [messages, setMessages] = useState([]);
+  const { state, dispatch } = useChat();
+  const messages = state.messages;
   const [inputText, setInputText] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const handleMessageSend = () => {
@@ -20,54 +19,19 @@ const ChatApp = () => {
         text: inputText,
         likes: 0, // Initialize likes count to 0
       };
-      socket.emit("message", newMessage);
+      state.socket.emit("message", newMessage);
       setInputText("");
     }
   };
 
-  useEffect(() => {
-    socket = socketIo(ENDPOINT, { transports: ["websocket"] });
-    socket.on("connect", () => {
-      console.log("Connected");
-    });
-
-    return () => {
-      socket.off();
-    };
-  }, []);
-
-  useEffect(() => {
-    socket.on("sendMessage", (data) => {
-      setMessages((prevMessages) => {
-        // Update the message only if ID doesn't exist in the previous messages
-        if (!prevMessages.find((msg) => msg.id === data.id)) {
-          return [...prevMessages, data];
-        }
-        return prevMessages;
-      });
-    });
-    return () => {
-      socket.off();
-    };
-  }, []);
 
   const handleLike = (id) => {
-    setMessages((prevMessages) => {
-      return prevMessages.map((message) => {
-        if (message.id === id) {
-          return {
-            ...message,
-            likes: message.likes + 1,
-          };
-        }
-        return message;
-      });
+    const updatedLikes = messages.find((message) => message.id === id).likes + 1;
+    dispatch({
+      type: "UPDATE_MESSAGE",
+      payload: { id, likes: updatedLikes }
     });
-    // Emit message with updated likes count
-    socket.emit("like", {
-      id: id,
-      likes: messages.find((message) => message.id === id).likes + 1,
-    });
+    state.socket.emit("like", { id, likes: updatedLikes });
   };
 
   const handleEmojiSelect = (emoji) => {
