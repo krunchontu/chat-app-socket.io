@@ -31,8 +31,8 @@ io.on("connection", (socket) => {
   });
 
   socket.on("like", ({ id, likes }) => {
-    // Emit like count update only to the sender
-    socket.emit("sendMessage", { id, likes });
+    // Broadcast like count update to all clients
+    io.emit("sendMessage", { id, likes });
   });
 
   socket.on("disconnect", () => {
