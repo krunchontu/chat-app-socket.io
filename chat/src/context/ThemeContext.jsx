@@ -27,12 +27,22 @@ export const ThemeProvider = ({ children }) => {
     setMounted(true);
   }, []);
 
-  // Apply theme class to document body and save to localStorage
+  // Apply theme class to document html for Tailwind and save to localStorage
   useEffect(() => {
     if (!mounted) return;
     
+    // For Tailwind dark mode, we need to add/remove the 'dark' class on the html element
+    const htmlElement = document.documentElement;
+    if (theme === "dark") {
+      htmlElement.classList.add("dark");
+    } else {
+      htmlElement.classList.remove("dark");
+    }
+    
+    // Keep the classic theme classes for legacy CSS
     document.body.classList.remove("light-theme", "dark-theme");
     document.body.classList.add(`${theme}-theme`);
+    
     localStorage.setItem("theme", theme);
     
     // Update meta theme-color for PWA

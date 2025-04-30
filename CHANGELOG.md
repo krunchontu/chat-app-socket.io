@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Security Enhancements**:
+  - Content sanitization with DOMPurify to prevent XSS attacks
+  - Strengthened password requirements with complexity validation
+  - CSRF protection for all state-changing operations
+  - Added comprehensive Security.md documentation
+- **Performance Optimizations**:
+  - Implemented virtualized message list using react-window for efficient rendering
+  - Added React.memo for pure components to prevent unnecessary re-renders
+  - Optimized event handlers with useCallback to reduce render cycles
+  - Improved memory usage by properly cleaning up event listeners
+  - Enhanced scroll position management for smoother user experience
+- **Offline Support**:
+  - Added message queueing when offline
+  - Implemented optimistic UI updates for immediate feedback
+  - Added automatic message delivery when back online
+  - Enhanced connection status monitoring and notifications
+  - Integrated seamless state recovery after connection interruptions
 - **Enhanced Message Management**:
   - Message editing: Users can now edit their own messages
   - Message deletion: Users can delete their own messages (soft delete)

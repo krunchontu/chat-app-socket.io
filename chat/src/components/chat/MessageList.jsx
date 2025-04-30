@@ -1,12 +1,13 @@
-import React, { forwardRef } from 'react';
-import MessageActions from './MessageActions';
+import React, { forwardRef, useState, useEffect } from 'react';
+import { FixedSizeList as List } from 'react-window';
+import AutoSizer from 'react-virtualized-auto-sizer';
 import { useAuth } from '../common/AuthContext';
-import './Chat.css';
+import MessageItem from './MessageItem';
 
 /**
- * MessageList component for rendering the list of chat messages
- * Extracts message rendering logic from Chat component for better maintainability
- *
+ * Virtualized MessageList component for rendering chat messages efficiently
+ * Uses react-window for optimized rendering of large message lists
+ * 
  * @param {Object} props - Component props
  * @param {Array} props.messages - Array of message objects to display
  * @param {boolean} props.loadingOlder - Whether older messages are being loaded
@@ -26,31 +27,44 @@ const MessageList = forwardRef(({
   formatTime
 }, ref) => {
   const { user } = useAuth();
+  const [listRef, setListRef] = useState(null);
+  const messageHeight = 80; // Default height estimate
+  
+  // Scroll to bottom when new messages arrive (if we're not loading older messages)
+  useEffect(() => {
+    if (listRef && !loadingOlder && messages.length > 0) {
+      listRef.scrollToItem(messages.length - 1);
+    }
+  }, [listRef, messages.length, loadingOlder]);
+  
+  // Handle loading more messages when scrolled to top
+  const handleItemsRendered = ({ visibleStartIndex }) => {
+    // If scrolled near the top and we have more messages, load them
+    if (visibleStartIndex <= 2 && hasMoreMessages && !loadingOlder) {
+      const nextPage = pagination.currentPage + 1;
+      loadMoreMessages(nextPage);
+    }
+  };
 
-  return (
-    <div 
-      className="chat-thread" 
-      ref={ref}
-      role="log"
-      aria-live="polite"
-      aria-label="Chat messages"
-    >
-      {/* Loading indicator for older messages with ARIA attributes */}
-      {loadingOlder && (
+  // Render header content (loading indicator or load more button)
+  const renderHeader = () => {
+    if (loadingOlder) {
+      return (
         <div 
-          className="loading-older-messages"
+          className="flex items-center justify-center p-2 bg-gray-100/70 dark:bg-dark-bg-hover/30 rounded-md my-1"
           aria-live="polite"
           role="status"
         >
-          <div className="loading-spinner-small" aria-hidden="true"></div>
-          <span>Loading older messages...</span>
+          <div className="w-5 h-5 border-2 border-t-primary border-r-transparent border-l-transparent border-b-transparent rounded-full animate-spin mr-2" aria-hidden="true"></div>
+          <span className="text-sm text-gray-600 dark:text-dark-text-secondary">Loading older messages...</span>
         </div>
-      )}
-      
-      {/* Load more messages button when at the top and more messages are available */}
-      {!loadingOlder && hasMoreMessages && messages.length > 0 && (
+      );
+    }
+    
+    if (!loadingOlder && hasMoreMessages && messages.length > 0) {
+      return (
         <button 
-          className="load-more-messages"
+          className="mx-auto mb-3 px-4 py-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-dark-bg-hover dark:hover:bg-dark-bg-active text-gray-700 dark:text-dark-text-secondary rounded-md text-sm transition-colors duration-150"
           onClick={() => {
             if (!loadingOlder) {
               const nextPage = pagination.currentPage + 1;
@@ -60,70 +74,68 @@ const MessageList = forwardRef(({
         >
           Load older messages
         </button>
-      )}
-      
-      {/* Display messages with accessibility attributes */}
-      {messages.map((message) => (
-        <div 
-          key={message.id} 
-          className={`chat-message 
-            ${message.user === user?.username ? 'own-message' : ''}
-            ${message.parentId ? 'is-reply' : ''}
-            slide-in
-          `}
-          role="article"
-          aria-labelledby={`user-${message.id} text-${message.id} time-${message.id}`}
-          data-testid={`message-${message.id}`}
-          data-is-own={message.user === user?.username ? 'true' : 'false'}
-          data-is-reply={message.parentId ? 'true' : 'false'}
-        > 
-          <div className="chat-circle" aria-hidden="true">
-            <span className="chat-circle-letter">{message.user ? message.user[0].toUpperCase() : '?'}</span>
+      );
+    }
+    
+    return null;
+  };
+
+  return (
+    <div 
+      className="flex-1 bg-gray-50 dark:bg-dark-bg-secondary transition-colors duration-300"
+      ref={ref}
+      role="log"
+      aria-live="polite"
+      aria-label="Chat messages"
+    >
+      {/* Show empty state when no messages */}
+      {messages.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center h-full">
+          <div className="text-center py-8 px-4 text-gray-500 dark:text-dark-text-tertiary italic">
+            No messages yet. Be the first to say hello!
           </div>
-          <div className="message-content">
-            <span 
-              className="message-user" 
-              id={`user-${message.id}`}
-            >
-              {message.user || 'System'}:
-            </span>
-            {/* Message text with edit indicator if edited */}
-            <span 
-              className={`message-text ${message.isEdited ? 'message-text-edited' : ''} ${message.isDeleted ? 'message-text-deleted' : ''}`}
-              id={`text-${message.id}`}
-            >
-              {/* Show reply indicator if this is a reply */}
-              {message.parentId && (
-                <div className="message-reply-indicator">
-                  Replying to {messages.find(m => m.id === message.parentId)?.user || 'message'}
-                </div>
-              )}
-              {message.isDeleted ? (
-                <em>This message has been deleted</em>
-              ) : (
-                message.text
-              )}
-            </span>
-            <span 
-              className="message-timestamp"
-              id={`time-${message.id}`}
-            >
-              {formatTime(message.timestamp)}
-            </span>
+        </div>
+      ) : (
+        <>
+          {/* Header content */}
+          <div className="p-3">
+            {renderHeader()}
           </div>
-          {/* Message actions (like, reply, edit, delete, react) */}
-          <MessageActions 
-            message={message} 
-            onReply={(msg) => setReplyingTo(msg)} 
-          />
-        </div>
-      ))}
-      
-      {/* Show when no messages are available */}
-      {messages.length === 0 && (
-        <div className="no-messages">
-          No messages yet. Be the first to say hello!
-        </div>
+          
+          {/* Virtualized message list */}
+          <div style={{ height: 'calc(100% - 50px)' }}>
+            <AutoSizer>
+              {({ height, width }) => (
+                <List
+                  ref={setListRef}
+                  height={height}
+                  width={width}
+                  itemCount={messages.length}
+                  itemSize={messageHeight}
+                  itemKey={(index) => messages[index]?.id || index}
+                  onItemsRendered={handleItemsRendered}
+                  itemData={{
+                    messages,
+                    setReplyingTo,
+                    currentUser: user?.username,
+                    formatTime
+                  }}
+                >
+                  {({ index, style, data }) => (
+                    <MessageItem
+                      message={messages[index]}
+                      style={style}
+                      onReply={setReplyingTo}
+                      currentUser={data.currentUser}
+                      formatTime={data.formatTime}
+                      messages={messages}
+                    />
+                  )}
+                </List>
+              )}
+            </AutoSizer>
+          </div>
+        </>
       )}
     </div>
   );

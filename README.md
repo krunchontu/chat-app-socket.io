@@ -1,10 +1,11 @@
-# Real-Time Chat Application
+# Dialoque
 
 A secure, accessible real-time chat application built with React, Socket.IO, Express, and MongoDB. This application provides user authentication, real-time messaging, message reactions, and user presence tracking with a focus on security, accessibility, and error handling.
 
 [![WCAG 2.1 AA Compliant](https://img.shields.io/badge/WCAG%202.1-AA%20Compliant-green)](https://www.w3.org/WAI/standards-guidelines/wcag/)
 [![Keyboard Accessible](https://img.shields.io/badge/Keyboard-Accessible-blue)](https://www.w3.org/TR/WCAG21/#keyboard-accessible)
 [![MIT License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
+[![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 
 ## Architecture
 
@@ -33,6 +34,9 @@ The application follows a client-server architecture:
 - **Message History**: Load previous messages on connection
 - **Responsive Design**: Works on desktop and mobile devices
 - **Security**: Input validation, rate limiting, and secure authentication
+- **Modern UI**: Sleek interface built with Tailwind CSS
+- **Toast Notifications**: Intuitive feedback system using React Hot Toast
+- **Dark/Light Mode**: Theme system with persistent preferences
 
 ## Technologies
 
@@ -40,7 +44,8 @@ The application follows a client-server architecture:
 - **Backend**: Node.js, Express.js, Socket.IO Server
 - **Database**: MongoDB with Mongoose ODM
 - **Authentication**: JWT (JSON Web Tokens)
-- **Styling**: CSS with responsive design
+- **UI Framework**: Tailwind CSS for responsive and consistent design
+- **Notifications**: React Hot Toast for toast notifications
 - **Security**: bcrypt for password hashing, express-rate-limit for rate limiting
 
 ## Getting Started
@@ -85,6 +90,42 @@ The application follows a client-server architecture:
    ```
 
 5. Open your browser and navigate to `http://localhost:3000` to use the application
+
+## UI Framework
+
+The application uses Tailwind CSS for styling, offering several advantages:
+
+1. **Consistent Design Language**: Uniform styling across components
+2. **Responsive by Default**: Mobile-first approach with easy breakpoint handling
+3. **Dark Mode Support**: Integrated with a theme system for light/dark preferences
+4. **Performance**: Only includes the CSS you actually use
+5. **Developer Experience**: Fast styling workflow directly in markup
+
+We implement a theme system that respects user preferences and persists their choice:
+
+```javascript
+// Example of the theme toggling functionality
+const toggleTheme = () => {
+  setTheme(prevTheme => (prevTheme === "dark" ? "light" : "dark"));
+};
+```
+
+## Toast Notification System
+
+The application uses React Hot Toast for notifications, providing a streamlined way to show:
+
+- Success messages
+- Error alerts
+- Connection status updates
+- New message notifications
+
+The toast system is integrated with both the UI theme and accessibility standards:
+
+```javascript
+// Example of custom toast notification
+showSuccessToast("Account created successfully!");
+showErrorToast("Unable to connect to server.");
+```
 
 ## Security Best Practices
 
@@ -159,3 +200,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Socket.IO team for their excellent real-time communication library
 - MongoDB team for their reliable database solution
 - React team for their powerful frontend framework
+- Tailwind Labs for their utility-first CSS framework
+- React Hot Toast for the intuitive notification system

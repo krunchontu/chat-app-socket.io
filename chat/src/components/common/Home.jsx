@@ -6,7 +6,7 @@ const Home = () => {
   return (
     <div className="home-container">
       <div className="home-content">
-        <h1>Welcome to Real-Time Chat</h1>
+        <h1>Welcome to Dialoque</h1>
         <p className="home-description">
           Connect and chat with friends in real-time. Share messages, reactions, and more!
         </p>

@@ -1,6 +1,6 @@
 {
-  "short_name": "Chat App",
-  "name": "Socket.io React Chat App",
+  "short_name": "Dialoque",
+  "name": "Dialoque",
   "icons": [
     {
       "src": "favicon.ico",

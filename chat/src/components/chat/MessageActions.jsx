@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useChat } from '../../context/ChatContext';
 import { useAuth } from '../common/AuthContext';
-import './MessageActions.css';
 
 /**
  * MessageActions component provides UI controls for message management
@@ -146,33 +145,42 @@ const MessageActions = ({ message, onReply }) => {
 
   // Show delete message UI for deleted messages
   if (message.isDeleted) {
-    return <div className="message-deleted">This message has been deleted</div>;
+    return (
+      <div className="bg-gray-100 dark:bg-dark-bg-tertiary/30 text-gray-500 dark:text-dark-text-tertiary italic text-center py-1 px-2 rounded-md text-sm">
+        This message has been deleted
+      </div>
+    );
   }
 
   // Show edit UI when editing
   if (isEditing) {
     return (
-      <div className="message-edit-container">
+      <div className="mt-2 w-full">
         <textarea
           ref={editInputRef}
           value={editText}
           onChange={(e) => setEditText(e.target.value)}
-          className="message-edit-input"
+          className="w-full px-3 py-2 border border-gray-300 dark:border-dark-border-primary rounded-md shadow-sm 
+                     focus:outline-none focus:ring-primary focus:border-primary
+                     dark:bg-dark-bg-input dark:text-dark-text-primary text-sm"
           maxLength={500}
+          rows={3}
         />
-        <div className="message-edit-actions">
+        <div className="flex justify-end space-x-2 mt-2">
           <button 
-            className="message-edit-save" 
+            className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 dark:bg-dark-bg-hover dark:hover:bg-dark-bg-active 
+                       text-gray-700 dark:text-dark-text-secondary rounded-md text-sm transition-colors"
+            onClick={handleCancelEdit}
+          >
+            Cancel
+          </button>
+          <button 
+            className="px-3 py-1.5 bg-primary hover:bg-primary-hover text-white rounded-md text-sm transition-colors
+                       disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={handleSaveEdit}
             disabled={editText.trim() === '' || editText === message.text}
           >
             Save
-          </button>
-          <button 
-            className="message-edit-cancel" 
-            onClick={handleCancelEdit}
-          >
-            Cancel
           </button>
         </div>
       </div>
@@ -180,36 +188,40 @@ const MessageActions = ({ message, onReply }) => {
   }
 
   return (
-    <div className="message-actions-container" ref={actionsRef}>
+    <div className="flex flex-col mt-1 relative" ref={actionsRef}>
       {/* Regular message display with action buttons */}
-      <div className="message-actions-buttons">
+      <div className="flex space-x-1 opacity-80 hover:opacity-100 transition-opacity">
         {/* Reply button - available to all users */}
         <button
-          className="message-action-button"
+          className="p-1 text-sm text-gray-500 dark:text-dark-text-tertiary hover:bg-gray-100 dark:hover:bg-dark-bg-hover rounded-full"
           onClick={handleReply}
           aria-label="Reply to this message"
         >
-          <span aria-hidden="true">↩️</span>
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
         </button>
         
         {/* Add reaction button */}
-        <div className="reaction-button-container">
+        <div className="relative">
           <button
-            className="message-action-button"
+            className="p-1 text-sm text-gray-500 dark:text-dark-text-tertiary hover:bg-gray-100 dark:hover:bg-dark-bg-hover rounded-full"
             onClick={() => setShowReactions(!showReactions)}
             aria-label="Add reaction"
             aria-expanded={showReactions}
             aria-haspopup="menu"
           >
-            <span aria-hidden="true">😀</span>
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 100-2 1 1 0 000 2zm7-1a1 1 0 11-2 0 1 1 0 012 0zm-7.536 5.879a1 1 0 001.415 0 3 3 0 014.242 0 1 1 0 001.415-1.415 5 5 0 00-7.072 0 1 1 0 000 1.415z" clipRule="evenodd" />
+            </svg>
           </button>
           
           {showReactions && (
-            <div className="reactions-menu" role="menu">
+            <div className="absolute bottom-8 -left-2 bg-white dark:bg-dark-bg-tertiary shadow-md rounded-lg p-1 grid grid-cols-4 gap-1 z-10" role="menu">
               {availableReactions.map(emoji => (
                 <button
                   key={emoji}
-                  className="reaction-option"
+                  className="w-8 h-8 flex items-center justify-center text-lg hover:bg-gray-100 dark:hover:bg-dark-bg-hover rounded"
                   onClick={() => handleReaction(emoji)}
                   aria-label={`React with ${emoji}`}
                   role="menuitem"
@@ -223,21 +235,23 @@ const MessageActions = ({ message, onReply }) => {
         
         {/* More actions button - only for own messages */}
         {isOwnMessage && (
-          <div className="more-actions-container">
+          <div className="relative">
             <button
-              className="message-action-button"
+              className="p-1 text-sm text-gray-500 dark:text-dark-text-tertiary hover:bg-gray-100 dark:hover:bg-dark-bg-hover rounded-full"
               onClick={() => setShowActions(!showActions)}
               aria-label="More actions"
               aria-expanded={showActions}
               aria-haspopup="menu"
             >
-              <span aria-hidden="true">⋯</span>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+              </svg>
             </button>
             
             {showActions && (
-              <div className="actions-menu" role="menu">
+              <div className="absolute top-8 right-0 bg-white dark:bg-dark-bg-tertiary shadow-md rounded-lg overflow-hidden z-10 w-24" role="menu">
                 <button
-                  className="action-option"
+                  className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-dark-text-primary hover:bg-gray-100 dark:hover:bg-dark-bg-hover"
                   onClick={handleEdit}
                   aria-label="Edit message"
                   role="menuitem"
@@ -245,7 +259,7 @@ const MessageActions = ({ message, onReply }) => {
                   Edit
                 </button>
                 <button
-                  className="action-option action-delete"
+                  className="w-full text-left px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
                   onClick={handleDelete}
                   aria-label="Delete message"
                   role="menuitem"
@@ -260,17 +274,21 @@ const MessageActions = ({ message, onReply }) => {
       
       {/* Display reactions */}
       {getReactionCounts().length > 0 && (
-        <div className="message-reactions">
+        <div className="flex flex-wrap gap-1 mt-1.5">
           {getReactionCounts().map(reaction => (
             <button
               key={reaction.emoji}
-              className={`reaction-badge ${reaction.reacted ? 'reacted' : ''}`}
+              className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs
+                ${reaction.reacted 
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300' 
+                  : 'bg-gray-100 dark:bg-dark-bg-hover text-gray-700 dark:text-dark-text-secondary'
+                } transition-colors`}
               onClick={() => handleReaction(reaction.emoji)}
               aria-label={`${reaction.emoji} reaction: ${reaction.count}`}
               aria-pressed={reaction.reacted}
             >
-              <span aria-hidden="true">{reaction.emoji}</span>
-              <span className="reaction-count">{reaction.count}</span>
+              <span aria-hidden="true" className="mr-0.5">{reaction.emoji}</span>
+              <span className="font-medium">{reaction.count}</span>
             </button>
           ))}
         </div>

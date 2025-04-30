@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
 import ErrorService, { ErrorCategory } from "../../services/ErrorService";
+import { setupCSRFProtection, clearCSRFToken } from "../../utils/csrfUtils";
 
 const AuthContext = createContext();
 
@@ -20,12 +21,16 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
   
-  // Configure axios to use the token
+  // Configure axios to use the token and CSRF protection
   useEffect(() => {
     const token = localStorage.getItem("token");
     
     if (token) {
       axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      // Set up CSRF protection for authenticated users
+      setupCSRFProtection().catch(err => {
+        console.error("Failed to set up CSRF protection:", err);
+      });
     } else {
       delete axios.defaults.headers.common["Authorization"];
     }
@@ -145,9 +150,10 @@ export const AuthProvider = ({ children }) => {
         );
       }
       
-      // Clear localStorage
+      // Clear localStorage and CSRF token
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+      clearCSRFToken();
       
       // Update state
       setUser(null);
@@ -160,6 +166,7 @@ export const AuthProvider = ({ children }) => {
       // Even if the server call fails, we still want to clear local state
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+      clearCSRFToken();
       setUser(null);
       
       return { success: true };

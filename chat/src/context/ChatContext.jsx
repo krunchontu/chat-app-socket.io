@@ -1,7 +1,14 @@
-import { createContext, useContext, useReducer, useEffect, useCallback } from "react";
+import { createContext, useContext, useReducer, useEffect, useCallback, useState } from "react";
 import socketIo from "socket.io-client";
 import axios from "axios";
 import { useAuth } from "../components/common/AuthContext";
+import { 
+  createOptimisticMessage, 
+  queueMessage, 
+  processQueue, 
+  replaceOptimisticMessage,
+  isOnline as checkOnline
+} from "../utils/offlineQueue";
 
 // Use environment variable for the endpoint, with a fallback for safety
 const ENDPOINT = process.env.REACT_APP_SOCKET_ENDPOINT || "http://localhost:4500/";
@@ -20,6 +27,9 @@ const ChatContext = createContext();
  * @param {Object} state - Current chat state
  * @param {Object} action - Dispatched action with type and payload
  * @returns {Object} Updated state
+ */
+/**
+ * Improved reducer with offline support and optimistic UI updates
  */
 const chatReducer = (state, action) => {
   switch (action.type) {
@@ -52,6 +62,17 @@ const chatReducer = (state, action) => {
         hasMoreMessages: action.payload.pagination?.currentPage < action.payload.pagination?.totalPages - 1
       };
     case "ADD_MESSAGE":
+      // If this is a server message that matches a temporary optimistic message, replace it
+      if (action.payload.isServerResponse && action.payload.tempId) {
+        return {
+          ...state,
+          messages: replaceOptimisticMessage(
+            state.messages, 
+            action.payload.tempId, 
+            action.payload.message
+          )
+        };
+      }
       // Avoid duplicate messages
       if (state.messages.some(msg => msg.id === action.payload.id)) {
         return state;
@@ -133,8 +154,12 @@ export const ChatProvider = ({ children }) => {
       limit: 20
     },
     hasMoreMessages: true,
-    loadingMore: false
+    loadingMore: false,
+    isOfflineMode: !checkOnline() // Initialize offline status
   });
+
+  // Track online status for the whole app
+  const [isOnline, setIsOnline] = useState(checkOnline);
   
   /**
    * Load more (older) messages with pagination
@@ -223,6 +248,48 @@ export const ChatProvider = ({ children }) => {
       dispatch({ type: "SET_LOADING", payload: false });
     }
   }, []);
+
+  // Handle online/offline status changes
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      dispatch({ 
+        type: "ADD_USER_NOTIFICATION", 
+        payload: {
+          type: "system",
+          message: "You are back online",
+          timestamp: new Date().toISOString()
+        }
+      });
+      
+      // Process any queued messages when coming back online
+      if (state.socket && state.socket.connected) {
+        processQueue(state.socket, dispatch).catch(err => {
+          console.error("Error processing offline queue:", err);
+        });
+      }
+    };
+    
+    const handleOffline = () => {
+      setIsOnline(false);
+      dispatch({ 
+        type: "ADD_USER_NOTIFICATION", 
+        payload: {
+          type: "system",
+          message: "You are offline. Messages will be sent when you reconnect.",
+          timestamp: new Date().toISOString()
+        }
+      });
+    };
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [state.socket]);
 
   // Fetch initial messages when authenticated
   useEffect(() => {
@@ -392,11 +459,18 @@ export const ChatProvider = ({ children }) => {
     // Set socket in state
     dispatch({ type: "SET_SOCKET", payload: socket });
 
+    // Process any queued messages once socket is connected
+    if (isOnline && socket && socket.connected) {
+      processQueue(socket, dispatch).catch(err => {
+        console.error("Error processing offline queue:", err);
+      });
+    }
+    
     // Cleanup on unmount
     return () => {
       socket.disconnect();
     };
-  }, [isAuthenticated, user, setupSocketEventHandlers]);
+  }, [isAuthenticated, user, setupSocketEventHandlers, isOnline]);
 
   /**
    * Edit a message
@@ -405,6 +479,54 @@ export const ChatProvider = ({ children }) => {
    * @param {string} newText - New content for the message
    * @returns {Promise<boolean>} Success status
    */
+  /**
+   * Send a message with offline support and optimistic UI
+   * 
+   * @param {string} text - Message content
+   * @param {string} [parentId] - Parent message ID for replies
+   * @returns {Promise<boolean>} Success status
+   */
+  const sendMessage = useCallback(async (text) => {
+    try {
+      // Create optimistic message
+      const optimisticMsg = createOptimisticMessage(text, user.username);
+      
+      // Add to UI immediately
+      dispatch({ type: "ADD_MESSAGE", payload: optimisticMsg });
+      
+      // Handle offline case
+      if (!isOnline || !state.isConnected) {
+        // Queue for later delivery
+        queueMessage(optimisticMsg, "message");
+        
+        // Notify user
+        dispatch({ 
+          type: "ADD_USER_NOTIFICATION", 
+          payload: {
+            type: "system",
+            message: "Message queued for sending when back online",
+            timestamp: new Date().toISOString()
+          }
+        });
+        return true;
+      }
+      
+      // Send message through socket
+      state.socket.emit("message", { 
+        text,
+        tempId: optimisticMsg.id // Send temp ID to match response to optimistic message
+      });
+      return true;
+    } catch (error) {
+      console.error("Error sending message:", error);
+      dispatch({ 
+        type: "SET_ERROR", 
+        payload: "Failed to send message" 
+      });
+      return false;
+    }
+  }, [state.socket, state.isConnected, isOnline, user]);
+
   const editMessage = useCallback(async (messageId, newText) => {
     if (!state.socket || !state.isConnected) {
       dispatch({ 
@@ -486,6 +608,13 @@ export const ChatProvider = ({ children }) => {
    * @param {string} text - Content of the reply
    * @returns {Promise<boolean>} Success status
    */
+  /**
+   * Reply to a message with offline support
+   * 
+   * @param {string} parentId - ID of the message being replied to
+   * @param {string} text - Content of the reply
+   * @returns {Promise<boolean>} Success status
+   */
   const replyToMessage = useCallback(async (parentId, text) => {
     if (!state.socket || !state.isConnected) {
       dispatch({ 
@@ -500,8 +629,37 @@ export const ChatProvider = ({ children }) => {
       if (!parentId) throw new Error("Parent message ID is required");
       if (!text || !text.trim()) throw new Error("Reply text cannot be empty");
       
+      // Create optimistic reply
+      const optimisticReply = createOptimisticMessage(text, user.username, parentId);
+      
+      // Add to UI immediately
+      dispatch({ type: "ADD_MESSAGE", payload: optimisticReply });
+      
+      // Handle offline case
+      if (!isOnline || !state.isConnected) {
+        // Queue for later delivery
+        queueMessage(optimisticReply, "reply", { parentId });
+        
+        dispatch({ 
+          type: "ADD_USER_NOTIFICATION", 
+          payload: {
+            type: "system",
+            message: "Reply queued for sending when back online",
+            timestamp: new Date().toISOString()
+          }
+        });
+        
+        // Clear reply UI state
+        dispatch({ type: "CLEAR_REPLY_TO" });
+        return true;
+      }
+      
       // Emit the reply event via socket
-      state.socket.emit("replyToMessage", { parentId, text });
+      state.socket.emit("replyToMessage", { 
+        parentId, 
+        text,
+        tempId: optimisticReply.id
+      });
       
       // Clear reply UI state
       dispatch({ type: "CLEAR_REPLY_TO" });
@@ -515,7 +673,7 @@ export const ChatProvider = ({ children }) => {
       });
       return false;
     }
-  }, [state.socket, state.isConnected]);
+  }, [state.socket, state.isConnected, isOnline, user]);
   
   /**
    * Toggle a reaction on a message
@@ -578,12 +736,14 @@ export const ChatProvider = ({ children }) => {
         state, 
         dispatch, 
         loadMoreMessages,
+        sendMessage,
         editMessage,
         deleteMessage,
         replyToMessage,
         toggleReaction,
         clearError,
-        setReplyingTo
+        setReplyingTo,
+        isOnline
       }}
     >
       {children}

@@ -2,7 +2,6 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import ThemeToggle from './ThemeToggle';
-import './HeaderComponent.css';
 
 /**
  * Header component with user information, connection status, and logout functionality
@@ -38,20 +37,24 @@ const HeaderComponent = ({ isConnected, onLogout, showLogout = true }) => {
   };
 
   return (
-    <header className="app-header">
-      <div className="header-content">
-        <div className="header-left">
-          <div className="app-logo">Chat App</div>
-          <div className="user-welcome" aria-live="polite">
+    <header className="bg-primary text-white shadow-md px-4 py-3 transition-colors duration-300">
+      <div className="flex justify-between items-center max-w-7xl mx-auto">
+        <div className="flex items-center space-x-4">
+          <div className="text-xl font-bold">Dialoque</div>
+          <div className="text-sm md:text-base" aria-live="polite">
             <span>Welcome, {user?.username || 'Guest'}!</span>
           </div>
         </div>
         
-        <div className="header-controls">
+        <div className="flex items-center space-x-3">
           {/* Connection status indicator with proper ARIA support */}
-          <div className="connection-status">
+          <div className="hidden md:block">
             <span 
-              className={isConnected ? "status-connected" : "status-disconnected"}
+              className={`text-sm px-2 py-1 rounded-full ${
+                isConnected 
+                  ? "bg-success/20 text-success" 
+                  : "bg-danger/20 text-danger"
+              }`}
               role="status"
               aria-live="polite"
             >
@@ -60,12 +63,12 @@ const HeaderComponent = ({ isConnected, onLogout, showLogout = true }) => {
           </div>
           
           {/* Theme toggle switch */}
-          <ThemeToggle className="header-theme-toggle" />
+          <ThemeToggle />
           
           {/* Logout button with ARIA attributes for accessibility */}
           {showLogout && user && (
             <button 
-              className="logout-btn"
+              className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded transition-colors duration-150 text-sm"
               onClick={handleLogout}
               aria-label="Log out from the application"
             >
