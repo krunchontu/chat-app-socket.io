@@ -1,6 +1,108 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
+import ReactDOM from 'react-dom';
 import { useChat } from '../../context/ChatContext';
 import { useAuth } from '../common/AuthContext';
+
+/**
+ * Reaction picker component rendered via Portal to ensure it appears above everything
+ */
+const ReactionPicker = ({ isOpen, onClose, onSelectReaction, reactions }) => {
+  if (!isOpen) return null;
+  
+  return ReactDOM.createPortal(
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999 }}>
+      <div 
+        style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.2)' }} 
+        onClick={onClose}
+      />
+      <div 
+        className="bg-white dark:bg-[#2D3136] shadow-xl rounded-lg p-3 border border-gray-100 dark:border-gray-700 animate-fadeIn"
+        style={{ 
+          position: 'fixed', 
+          top: '40%', 
+          left: '50%', 
+          transform: 'translate(-50%, -50%)',
+          width: '300px',
+          zIndex: 10000 
+        }}
+      >
+        <div className="flex flex-wrap gap-3 justify-center">
+          {reactions.map(item => (
+            <button
+              key={item.emoji}
+              className="w-12 h-12 flex items-center justify-center text-2xl bg-gray-50 dark:bg-[#1E1E1E]/70 hover:bg-gray-100 dark:hover:bg-[#1E1E1E] rounded-full transition-colors relative group shadow-sm hover:shadow-md"
+              onClick={() => onSelectReaction(item.emoji)}
+              aria-label={`React with ${item.label}`}
+            >
+              <span className="transform group-hover:scale-125">{item.emoji}</span>
+              <span className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                {item.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+/**
+ * More Actions Menu component rendered via Portal
+ */
+const MoreActionsMenu = ({ isOpen, onClose, onEdit, onDelete }) => {
+  if (!isOpen) return null;
+  
+  return ReactDOM.createPortal(
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999 }}>
+      <div 
+        style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.1)' }} 
+        onClick={onClose}
+      />
+      <div 
+        className="bg-white dark:bg-[#2D3136] shadow-lg rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 animate-fadeIn"
+        style={{ 
+          position: 'fixed', 
+          top: '40%', 
+          left: '50%', 
+          transform: 'translate(-50%, -50%)',
+          width: '250px',
+          zIndex: 10000 
+        }}
+      >
+        <button
+          className="w-full text-left px-4 py-3 text-[#128C7E] dark:text-[#00A884] hover:bg-gray-50 dark:hover:bg-[#1E1E1E] flex items-center"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit();
+            onClose();
+          }}
+          aria-label="Edit message"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          Edit
+        </button>
+        <button
+          className="w-full text-left px-4 py-3 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+            onClose();
+          }}
+          aria-label="Delete message"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          Delete
+        </button>
+      </div>
+    </div>,
+    document.body
+  );
+};
 
 /**
  * MessageActions component provides UI controls for message management
@@ -20,7 +122,7 @@ const MessageActions = memo(({ message, onReply }) => {
   const [showReactions, setShowReactions] = useState(false);
   const actionsRef = useRef(null);
   const editInputRef = useRef(null);
-
+  
   // Available reactions with descriptive labels
   const availableReactions = [
     { emoji: '👍', label: 'Thumbs Up' },
@@ -57,21 +159,6 @@ const MessageActions = memo(({ message, onReply }) => {
     
     return counts;
   }, [message.reactions, user?.id]);
-
-  // Close menus when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (actionsRef.current && !actionsRef.current.contains(event.target)) {
-        setShowActions(false);
-        setShowReactions(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
 
   // Put focus on edit input when editing starts
   useEffect(() => {
@@ -202,9 +289,12 @@ const MessageActions = memo(({ message, onReply }) => {
   const reactionCounts = getReactionCounts();
 
   return (
-<div className="flex flex-col relative z-20" ref={actionsRef} data-testid="message-actions">
-  {/* Message action buttons with improved stacking context and layout */}
-  <div className="flex space-x-2 opacity-90 hover:opacity-100 transition-opacity pointer-events-auto bg-transparent" role="toolbar" aria-label="Message actions">
+    <div className="flex flex-col relative z-20" ref={actionsRef} data-testid="message-actions">
+      {/* Message action buttons with improved stacking context and layout */}
+      <div className="flex space-x-2 opacity-90 hover:opacity-100 transition-opacity pointer-events-auto bg-transparent" 
+        role="toolbar" 
+        aria-label="Message actions"
+      >
         {/* Reply button with enhanced styling */}
         <button
           className="p-2 text-sm rounded-full bg-white dark:bg-dark-bg-hover 
@@ -224,128 +314,47 @@ const MessageActions = memo(({ message, onReply }) => {
         </button>
         
         {/* Add reaction button - enhanced styling */}
-        <div className="relative">
+        <button
+          className="p-2.5 text-sm rounded-full bg-white/90 dark:bg-dark-bg-hover/90 
+                   text-primary dark:text-primary-hover hover:bg-white dark:hover:bg-dark-bg-active 
+                   shadow-sm hover:shadow-md transition-all z-10"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowReactions(!showReactions);
+            console.log("Reaction button clicked, toggling state to:", !showReactions);
+          }}
+          aria-label="Add reaction"
+          aria-expanded={showReactions}
+          aria-haspopup="menu"
+          title="Add reaction"
+          tabIndex={0}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </button>
+        
+        {/* More actions button - only for own messages - enhanced styling */}
+        {isUserOwned && (
           <button
             className="p-2.5 text-sm rounded-full bg-white/90 dark:bg-dark-bg-hover/90 
                      text-primary dark:text-primary-hover hover:bg-white dark:hover:bg-dark-bg-active 
                      shadow-sm hover:shadow-md transition-all z-10"
             onClick={(e) => {
               e.stopPropagation();
-              setShowReactions(!showReactions);
+              setShowActions(!showActions);
+              console.log("More actions button clicked, toggling state to:", !showActions);
             }}
-            aria-label="Add reaction"
-            aria-expanded={showReactions}
+            aria-label="More actions"
+            aria-expanded={showActions}
             aria-haspopup="menu"
-            title="Add reaction"
+            title="More options"
             tabIndex={0}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
             </svg>
           </button>
-          
-          {showReactions && (
-            <>
-              {/* Backdrop to catch clicks outside the reactions menu */}
-              <div 
-                className="fixed inset-0 z-40" 
-                onClick={() => setShowReactions(false)}
-              />
-
-              {/* Reaction picker with improved positioning and layout */}
-              <div 
-                className="absolute bottom-12 left-0 bg-white dark:bg-[#2D3136] shadow-xl rounded-lg p-3 z-50 border border-gray-100 dark:border-gray-700 animate-fadeIn" 
-                role="menu"
-                style={{ width: '240px' }}
-                onClick={(e) => e.stopPropagation()}
-                data-testid="reaction-picker"
-              >
-                <div className="flex flex-wrap gap-3 justify-center">
-                  {availableReactions.map(item => (
-                    <button
-                      key={item.emoji}
-                      className="w-11 h-11 flex items-center justify-center text-2xl bg-gray-50 dark:bg-[#1E1E1E]/70 hover:bg-gray-100 dark:hover:bg-[#1E1E1E] rounded-full transition-colors relative group shadow-sm hover:shadow-md"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleReaction(item.emoji);
-                      }}
-                      aria-label={`React with ${item.label}`}
-                      role="menuitem"
-                      title={item.label}
-                    >
-                      <span className="transform group-hover:scale-125">{item.emoji}</span>
-                      <span className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-black text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                        {item.label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-        
-        {/* More actions button - only for own messages - enhanced styling */}
-        {isUserOwned && (
-          <div className="relative">
-            <button
-              className="p-2.5 text-sm rounded-full bg-white/90 dark:bg-dark-bg-hover/90 
-                       text-primary dark:text-primary-hover hover:bg-white dark:hover:bg-dark-bg-active 
-                       shadow-sm hover:shadow-md transition-all z-10"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowActions(!showActions);
-              }}
-              aria-label="More actions"
-              aria-expanded={showActions}
-              aria-haspopup="menu"
-              title="More options"
-              tabIndex={0}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-              </svg>
-            </button>
-            
-            {showActions && (
-              <>
-                <div 
-                  className="fixed inset-0 z-40" 
-                  onClick={() => setShowActions(false)}
-                />
-                <div className="absolute top-10 right-0 bg-white dark:bg-[#2D3136] shadow-lg rounded-lg overflow-hidden z-50 w-32 border border-gray-100 dark:border-gray-700 animate-fadeIn" role="menu">
-                  <button
-                    className="w-full text-left px-4 py-2.5 text-sm text-[#128C7E] dark:text-[#00A884] hover:bg-gray-50 dark:hover:bg-[#1E1E1E] flex items-center"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEdit();
-                    }}
-                    aria-label="Edit message"
-                    role="menuitem"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    Edit
-                  </button>
-                  <button
-                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete();
-                    }}
-                    aria-label="Delete message"
-                    role="menuitem"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                    Delete
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
         )}
       </div>
       
@@ -378,6 +387,24 @@ const MessageActions = memo(({ message, onReply }) => {
             );
           })}
         </div>
+      )}
+      
+      {/* Portal-based Reaction Picker */}
+      <ReactionPicker 
+        isOpen={showReactions}
+        onClose={() => setShowReactions(false)}
+        onSelectReaction={handleReaction}
+        reactions={availableReactions}
+      />
+      
+      {/* Portal-based More Actions Menu */}
+      {isUserOwned && (
+        <MoreActionsMenu 
+          isOpen={showActions}
+          onClose={() => setShowActions(false)}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
       )}
     </div>
   );

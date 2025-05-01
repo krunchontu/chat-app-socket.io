@@ -252,7 +252,7 @@ const MessageItem = memo(({
         />
         
         {/* Message actions with improved positioning */}
-        <div className="absolute bottom-0 right-0 transform translate-y-[90%] pointer-events-auto z-10 w-full flex justify-end">
+        <div className={`absolute ${isOwn ? 'top-0 left-0 translate-y-[10px] -translate-x-[110%]' : 'bottom-0 right-0 translate-y-[50%]'} transform pointer-events-auto z-30 ${isOwn ? 'w-auto' : 'w-full'} flex ${isOwn ? 'justify-start' : 'justify-end'}`}>
           <MessageActions 
             message={message} 
             onReply={onReply} 
