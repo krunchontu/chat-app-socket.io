@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../common/AuthContext";
-import { showErrorToast } from "../../utils/toastUtils";
+import { showErrorToast, showInfoToast } from "../../utils/toastUtils";
+import { createLogger } from "../../utils/logger";
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -10,32 +11,75 @@ const Login = () => {
   });
   
   const [error, setError] = useState("");
+  const [errorType, setErrorType] = useState(null); // 'auth', 'network', 'server'
   const [loading, setLoading] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const navigate = useNavigate();
   const { login } = useAuth();
+  const logger = createLogger("Login");
   
   const { username, password } = formData;
   
   const onChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
     
+  // Clear error on input change
+  useEffect(() => {
+    if (error) {
+      setError("");
+      setErrorType(null);
+    }
+  }, [formData]);
+
   const onSubmit = async (e) => {
     e.preventDefault();
     
     // Clear previous errors
     setError("");
+    setErrorType(null);
     setLoading(true);
     
-    const result = await login(username, password);
-    
-    if (result.success) {
-      // Redirect to chat
-      navigate("/chat");
-    } else {
-      setError(result.message);
-      showErrorToast(result.message);
+    try {
+      logger.info("Attempting login", { username });
+      const result = await login(username, password);
+      
+      if (result.success) {
+        logger.info("Login successful, redirecting to chat");
+        // Show brief success message
+        showInfoToast("Login successful");
+        // Redirect to chat
+        navigate("/chat");
+      } else {
+        logger.warn("Login failed", { error: result.message });
+        
+        // Categorize error
+        let type = "auth";
+        if (result.message?.includes("network") || result.message?.includes("connect")) {
+          type = "network";
+        } else if (result.message?.includes("server") || result.message?.includes("500")) {
+          type = "server";
+        }
+        
+        setErrorType(type);
+        setError(result.message);
+        showErrorToast(result.message);
+        setLoading(false);
+      }
+    } catch (err) {
+      logger.error("Unexpected error during login", err);
+      setErrorType("unexpected");
+      setError("An unexpected error occurred. Please try again.");
+      showErrorToast("Login failed");
       setLoading(false);
     }
+  };
+  
+  // Try to login again after fixing connection issues
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
+    setError("");
+    setErrorType(null);
+    onSubmit(new Event('submit'));
   };
   
   return (
@@ -47,8 +91,34 @@ const Login = () => {
           </h2>
           
           {error && (
-            <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400">
-              {error}
+            <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/20 border-l-4 border-red-500 text-red-700 dark:text-red-400 rounded">
+              <div className="flex items-center mb-1">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <span className="font-medium">
+                  {errorType === 'auth' && 'Authentication Failed'}
+                  {errorType === 'network' && 'Connection Error'}
+                  {errorType === 'server' && 'Server Error'}
+                  {!errorType && 'Error'}
+                </span>
+              </div>
+              <p>{error}</p>
+              
+              {errorType === 'network' && (
+                <button 
+                  onClick={handleRetry}
+                  className="mt-2 bg-red-200 dark:bg-red-800 hover:bg-red-300 dark:hover:bg-red-700 text-red-800 dark:text-red-200 px-3 py-1 rounded text-sm transition-colors duration-200"
+                >
+                  Retry Connection
+                </button>
+              )}
+              
+              {errorType === 'auth' && (
+                <p className="text-sm mt-2">
+                  Please check your username and password and try again.
+                </p>
+              )}
             </div>
           )}
           

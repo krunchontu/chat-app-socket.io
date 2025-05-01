@@ -1,402 +1,249 @@
-const Message = require("../models/message");
-const User = require("../models/user");
-const mongoose = require("mongoose");
+const MessageService = require("../services/messageService");
+const { validateObjectId } = require("../utils/validationUtils"); // Only need this for route param validation
+const logger = require("../utils/logger").message;
 
 /**
- * Controller for message operations with enhanced features
- * Supports CRUD operations, reactions, threading, and search
+ * Controller for message operations, delegating business logic to MessageService.
+ * Handles HTTP requests and responses for message-related API endpoints.
+ * Note: Socket.IO event handling logic (create, edit, delete, reply, reaction)
+ * is typically initiated elsewhere (e.g., main socket handler in index.js)
+ * which then calls the corresponding MessageService methods.
+ * These controller methods are primarily for the REST API.
  */
 
-// Get messages with pagination support
+// Helper function to handle API errors consistently
+const handleApiError = (res, error, operation) => {
+  const statusCode = error.message.includes("Not authorized")
+    ? 403
+    : error.message.includes("not found") ||
+      error.message.includes("Invalid ID format")
+    ? 404
+    : error.message.includes("required") ||
+      error.message.includes("cannot be empty")
+    ? 400
+    : 500;
+
+  logger.error(`API error during message ${operation}`, {
+    operation,
+    errorMessage: error.message,
+    statusCode,
+    // stack: error.stack, // Optionally include stack in logs but not response
+  });
+
+  res
+    .status(statusCode)
+    .json({ message: error.message || `Server error during ${operation}` });
+};
+
+// GET /api/messages - Retrieve messages with pagination
 const getMessages = async (req, res) => {
   try {
-    // Parse pagination parameters
-    const page = parseInt(req.query.page) || 0; // Default to first page
-    const limit = parseInt(req.query.limit) || 20; // Default to 20 messages per page
+    const page = parseInt(req.query.page) || 0;
+    const limit = parseInt(req.query.limit) || 20;
 
-    // Get total count for pagination info
-    const totalMessages = await Message.countDocuments();
+    logger.info("Controller: Request to get messages", { page, limit });
 
-    // Get messages with pagination, sorted by timestamp (oldest first)
-    const messages = await Message.find()
-      .sort({ timestamp: 1 })
-      .skip(page * limit)
-      .limit(limit)
-      .lean();
-
-    // Return messages with pagination metadata
-    res.status(200).json({
-      messages,
-      pagination: {
-        totalMessages,
-        totalPages: Math.ceil(totalMessages / limit),
-        currentPage: page,
-        limit,
-      },
-    });
+    const result = await MessageService.getMessages(page, limit);
+    res.status(200).json(result);
   } catch (error) {
-    console.error("Error fetching messages:", error);
-    res.status(500).json({ message: "Server error" });
+    handleApiError(res, error, "retrieval");
   }
 };
 
-// Create a new message - primarily used by Socket.IO
+// --- Methods primarily for Socket.IO (called from socket handlers) ---
+// These might not be directly exposed as REST endpoints but show the pattern
+
+// Example: Create a new message (called by socket handler)
 const createMessage = async (messageData) => {
+  // Assumes messageData contains { text, user, tempId, _meta }
+  // Assumes user validation/lookup happened in socket middleware or handler
   try {
-    // Find the user by username to get userId
-    const user = await User.findOne({ username: messageData.user });
-
-    if (!user) {
-      throw new Error(`User not found: ${messageData.user}`);
-    }
-
-    // Create message with userId
-    const message = new Message({
-      ...messageData,
-      userId: user._id,
-      likedBy: [],
+    logger.info("Controller: Delegating message creation to service", {
+      user: messageData.user,
+      tempId: messageData.tempId,
     });
-
-    const savedMessage = await message.save();
-    return savedMessage;
+    // Note: No res object here as it's called internally
+    const savedMessage = await MessageService.createMessage(messageData);
+    return savedMessage; // Return to socket handler to emit
   } catch (error) {
-    console.error("Error creating message:", error);
-    throw error;
+    // Error handling might involve emitting an error event back to the specific client
+    logger.error("Controller: Error during message creation delegation", {
+      error: error.message,
+      user: messageData?.user,
+    });
+    throw error; // Re-throw for the socket handler to manage
   }
 };
 
-// Toggle like on a message (legacy method for backwards compatibility)
+// Example: Toggle like (called by socket handler)
 const toggleMessageLike = async (messageId, userId) => {
+  // Assumes messageId and userId are validated and provided by socket handler
   try {
-    // Find the message
-    const message = await Message.findById(messageId);
-
-    if (!message) {
-      throw new Error(`Message not found: ${messageId}`);
-    }
-
-    // Check if user has already liked this message
-    const userIndex = message.likedBy.indexOf(userId);
-    let updatedLikes = message.likes;
-
-    if (userIndex === -1) {
-      // User hasn't liked yet - add like
-      message.likedBy.push(userId);
-      updatedLikes = message.likes + 1;
-
-      // Also add to new reaction system
-      const thumbsUp = message.reactions.get("👍") || [];
-      if (!thumbsUp.includes(userId)) {
-        message.reactions.set("👍", [...thumbsUp, userId]);
-      }
-    } else {
-      // User already liked - remove like
-      message.likedBy.splice(userIndex, 1);
-      updatedLikes = message.likes - 1;
-
-      // Also remove from new reaction system
-      const thumbsUp = message.reactions.get("👍") || [];
-      message.reactions.set(
-        "👍",
-        thumbsUp.filter((id) => !id.equals(userId))
-      );
-    }
-
-    // Update message with new likes count and likedBy array
-    const updatedMessage = await Message.findByIdAndUpdate(
+    logger.info("Controller: Delegating legacy like toggle to service", {
       messageId,
-      {
-        likes: updatedLikes,
-        likedBy: message.likedBy,
-        reactions: message.reactions,
-      },
-      { new: true }
-    );
-
-    return updatedMessage;
-  } catch (error) {
-    console.error("Error toggling message like:", error);
-    throw error;
-  }
-};
-
-/**
- * Edit a message
- * @param {string} messageId - ID of message to edit
- * @param {string} userId - ID of user making the edit
- * @param {string} newText - New content for the message
- * @returns {Object} Updated message
- */
-const editMessage = async (messageId, userId, newText) => {
-  try {
-    // Find message and verify ownership
-    const message = await Message.findById(messageId);
-
-    if (!message) {
-      throw new Error(`Message not found: ${messageId}`);
-    }
-
-    // Check if user owns this message
-    if (!message.userId.equals(userId)) {
-      throw new Error("Not authorized to edit this message");
-    }
-
-    // Check if message is deleted
-    if (message.isDeleted) {
-      throw new Error("Cannot edit a deleted message");
-    }
-
-    // Save current text in edit history
-    const editHistoryItem = {
-      text: message.text,
-      editedAt: new Date(),
-    };
-
-    // Update the message
-    const updatedMessage = await Message.findByIdAndUpdate(
-      messageId,
-      {
-        text: newText,
-        isEdited: true,
-        $push: { editHistory: editHistoryItem },
-      },
-      { new: true }
-    );
-
-    return updatedMessage;
-  } catch (error) {
-    console.error("Error editing message:", error);
-    throw error;
-  }
-};
-
-/**
- * Delete a message (soft delete)
- * @param {string} messageId - ID of message to delete
- * @param {string} userId - ID of user requesting deletion
- * @returns {Object} Updated message with isDeleted flag
- */
-const deleteMessage = async (messageId, userId) => {
-  try {
-    console.log(
-      `Attempting to delete message ID: ${messageId} by user ID: ${userId}`
-    );
-
-    // Basic validation
-    if (!messageId) {
-      throw new Error("Message ID is required");
-    }
-
-    if (!userId) {
-      throw new Error("User ID is required");
-    }
-
-    // Find message
-    const message = await Message.findById(messageId);
-    console.log(
-      "Found message:",
-      message
-        ? {
-            id: message.id,
-            user: message.user,
-            userId: message.userId.toString(),
-            requestingUserId: userId,
-            isMatch: message.userId.equals(userId),
-          }
-        : "Message not found"
-    );
-
-    if (!message) {
-      throw new Error(`Message not found: ${messageId}`);
-    }
-
-    // Check if user owns this message - ensure we're comparing ObjectIds properly
-    if (!message.userId.equals(userId)) {
-      console.error(
-        `Authentication failure: Message user ID ${message.userId} does not match requesting user ${userId}`
-      );
-      throw new Error("Not authorized to delete this message");
-    }
-
-    // Soft delete the message
-    const updatedMessage = await Message.findByIdAndUpdate(
-      messageId,
-      { isDeleted: true },
-      { new: true }
-    );
-
-    console.log(`Message ${messageId} deleted successfully`);
-    return updatedMessage;
-  } catch (error) {
-    console.error("Error deleting message:", error);
-    throw error;
-  }
-};
-
-/**
- * Create a reply to a message
- * @param {Object} messageData - Message data (text, user)
- * @param {string} parentId - ID of the parent message
- * @returns {Object} Created reply message
- */
-const replyToMessage = async (messageData, parentId) => {
-  try {
-    // Check if parent message exists
-    const parentMessage = await Message.findById(parentId);
-
-    if (!parentMessage) {
-      throw new Error(`Parent message not found: ${parentId}`);
-    }
-
-    // Find the user by username to get userId
-    const user = await User.findOne({ username: messageData.user });
-
-    if (!user) {
-      throw new Error(`User not found: ${messageData.user}`);
-    }
-
-    // Create message with parentId reference
-    const message = new Message({
-      ...messageData,
-      userId: user._id,
-      parentId: parentId,
-      likedBy: [],
+      userId,
     });
-
-    const savedMessage = await message.save();
-    return savedMessage;
+    const updatedMessage = await MessageService.toggleMessageLike(
+      messageId,
+      userId
+    );
+    return updatedMessage; // Return to socket handler to emit
   } catch (error) {
-    console.error("Error creating reply:", error);
+    logger.error("Controller: Error during legacy like toggle delegation", {
+      messageId,
+      userId,
+      error: error.message,
+    });
     throw error;
   }
 };
 
-/**
- * Get replies to a specific message
- * @param {string} parentId - ID of the parent message
- * @returns {Array} Array of reply messages
- */
+// Example: Edit message (called by socket handler)
+const editMessage = async (messageId, userId, newText) => {
+  // Assumes parameters are validated and provided by socket handler
+  try {
+    logger.info("Controller: Delegating message edit to service", {
+      messageId,
+      userId,
+    });
+    const updatedMessage = await MessageService.editMessage(
+      messageId,
+      userId,
+      newText
+    );
+    return updatedMessage; // Return to socket handler to emit
+  } catch (error) {
+    logger.error("Controller: Error during message edit delegation", {
+      messageId,
+      userId,
+      error: error.message,
+    });
+    throw error;
+  }
+};
+
+// Example: Delete message (called by socket handler)
+const deleteMessage = async (messageId, userId) => {
+  // Assumes parameters are validated and provided by socket handler
+  try {
+    logger.info("Controller: Delegating message delete to service", {
+      messageId,
+      userId,
+    });
+    const updatedMessage = await MessageService.deleteMessage(
+      messageId,
+      userId
+    );
+    return updatedMessage; // Return to socket handler to emit 'messageDeleted'
+  } catch (error) {
+    logger.error("Controller: Error during message delete delegation", {
+      messageId,
+      userId,
+      error: error.message,
+    });
+    throw error;
+  }
+};
+
+// Example: Reply to message (called by socket handler)
+const replyToMessage = async (messageData, parentId) => {
+  // Assumes parameters are validated and provided by socket handler
+  try {
+    logger.info("Controller: Delegating message reply to service", {
+      parentId,
+      user: messageData.user,
+    });
+    const savedReply = await MessageService.replyToMessage(
+      messageData,
+      parentId
+    );
+    return savedReply; // Return to socket handler to emit 'replyCreated'
+  } catch (error) {
+    logger.error("Controller: Error during message reply delegation", {
+      parentId,
+      user: messageData?.user,
+      error: error.message,
+    });
+    throw error;
+  }
+};
+
+// Example: Toggle reaction (called by socket handler)
+const toggleReaction = async (messageId, userId, emoji) => {
+  // Assumes parameters are validated and provided by socket handler
+  try {
+    logger.info("Controller: Delegating reaction toggle to service", {
+      messageId,
+      userId,
+      emoji,
+    });
+    const updatedMessage = await MessageService.toggleReaction(
+      messageId,
+      userId,
+      emoji
+    );
+    return updatedMessage; // Return to socket handler to emit 'messageUpdated'
+  } catch (error) {
+    logger.error("Controller: Error during reaction toggle delegation", {
+      messageId,
+      userId,
+      emoji,
+      error: error.message,
+    });
+    throw error;
+  }
+};
+
+// --- Methods primarily for REST API ---
+
+// GET /api/messages/:parentId/replies - Retrieve replies for a message
 const getMessageReplies = async (req, res) => {
   try {
     const { parentId } = req.params;
+    logger.info("Controller: Request to get replies", { parentId });
 
-    // Validate parentId is a valid MongoDB ObjectId
-    if (!mongoose.Types.ObjectId.isValid(parentId)) {
-      return res.status(400).json({ message: "Invalid message ID format" });
-    }
+    // Validate ID format before hitting the service
+    validateObjectId(parentId);
 
-    // Find all messages that reference this parent
-    const replies = await Message.find({ parentId })
-      .sort({ timestamp: 1 })
-      .lean();
-
+    const replies = await MessageService.getMessageReplies(parentId);
     res.status(200).json(replies);
   } catch (error) {
-    console.error("Error fetching message replies:", error);
-    res.status(500).json({ message: "Server error" });
+    // Handle specific validation error or general service error
+    if (error.message.includes("Invalid ID format")) {
+      return res.status(400).json({ message: "Invalid message ID format" });
+    }
+    handleApiError(res, error, "reply retrieval");
   }
 };
 
-/**
- * Toggle a reaction on a message
- * @param {string} messageId - ID of message to react to
- * @param {string} userId - ID of user adding the reaction
- * @param {string} emoji - The emoji reaction to toggle
- * @returns {Object} Updated message
- */
-const toggleReaction = async (messageId, userId, emoji) => {
-  try {
-    // Validate emoji is provided
-    if (!emoji) {
-      throw new Error("Emoji reaction required");
-    }
-
-    // Find the message
-    const message = await Message.findById(messageId);
-
-    if (!message) {
-      throw new Error(`Message not found: ${messageId}`);
-    }
-
-    // Get current reactions for this emoji
-    const currentReactions = message.reactions.get(emoji) || [];
-
-    // Check if user has already reacted with this emoji
-    const userIndex = currentReactions.findIndex((id) => id.equals(userId));
-
-    if (userIndex === -1) {
-      // User hasn't reacted yet - add reaction
-      message.reactions.set(emoji, [...currentReactions, userId]);
-    } else {
-      // User already reacted - remove reaction
-      message.reactions.set(
-        emoji,
-        currentReactions.filter((id) => !id.equals(userId))
-      );
-    }
-
-    // Update message with new reactions
-    const updatedMessage = await Message.findByIdAndUpdate(
-      messageId,
-      { reactions: message.reactions },
-      { new: true }
-    );
-
-    return updatedMessage;
-  } catch (error) {
-    console.error(`Error toggling ${emoji} reaction:`, error);
-    throw error;
-  }
-};
-
-/**
- * Search messages by content
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- */
+// GET /api/messages/search - Search messages
 const searchMessages = async (req, res) => {
   try {
     const { query } = req.query;
     const page = parseInt(req.query.page) || 0;
     const limit = parseInt(req.query.limit) || 20;
 
+    logger.info("Controller: Request to search messages", {
+      query,
+      page,
+      limit,
+      userId: req.user?.id,
+    });
+
+    // Basic query validation
     if (!query || query.trim().length === 0) {
       return res.status(400).json({ message: "Search query is required" });
     }
 
-    // Create text index search query
-    const searchQuery = {
-      $text: { $search: query },
-      isDeleted: { $ne: true }, // Exclude deleted messages
-    };
-
-    // Get total count for pagination
-    const totalMessages = await Message.countDocuments(searchQuery);
-
-    // Execute search with pagination
-    const messages = await Message.find(searchQuery)
-      .sort({ score: { $meta: "textScore" }, timestamp: -1 })
-      .skip(page * limit)
-      .limit(limit)
-      .lean();
-
-    res.status(200).json({
-      messages,
-      pagination: {
-        totalMessages,
-        totalPages: Math.ceil(totalMessages / limit),
-        currentPage: page,
-        limit,
-      },
-    });
+    const result = await MessageService.searchMessages(query, page, limit);
+    res.status(200).json(result);
   } catch (error) {
-    console.error("Error searching messages:", error);
-    res.status(500).json({ message: "Server error during search" });
+    handleApiError(res, error, "search");
   }
 };
 
 module.exports = {
-  getMessages,
+  getMessages, // Exposed API endpoint
   createMessage,
   toggleMessageLike,
   editMessage,

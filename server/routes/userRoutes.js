@@ -6,6 +6,7 @@ const {
   getUserProfile,
   updateUserProfile,
   logoutUser,
+  getCsrfToken,
 } = require("../controllers/userController");
 const { auth } = require("../middleware/auth");
 const { authLimiter } = require("../middleware/rateLimiter");
@@ -29,5 +30,8 @@ router.put("/profile", auth, validateProfileUpdate, updateUserProfile);
 
 // POST /api/users/logout - Logout current user (protected)
 router.post("/logout", auth, logoutUser);
+
+// GET /api/users/csrf-token - Get a CSRF token for form submissions
+router.get("/csrf-token", getCsrfToken);
 
 module.exports = router;

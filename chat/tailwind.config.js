@@ -6,12 +6,19 @@ module.exports = {
     extend: {
       colors: {
         primary: {
-          DEFAULT: "#007bff",
-          hover: "#0069d9",
+          DEFAULT: "#1a73e8", // More modern blue
+          hover: "#1765cc",
+          50: "#e8f0fe",
+          100: "#d2e3fc",
+          200: "#aacbfa",
+          300: "#7baaf7",
+          400: "#4c8df5",
+          700: "#1967d2",
+          800: "#185abc",
         },
-        success: "#43b581",
-        danger: "#f04747",
-        warning: "#faa61a",
+        success: "#34a853", // More standard green
+        danger: "#ea4335", // Consistent red
+        warning: "#fbbc04", // Improved warning color
         // Light theme colors
         light: {
           bg: {
@@ -37,23 +44,23 @@ module.exports = {
         // Dark theme colors
         dark: {
           bg: {
-            primary: "#36393f",
-            secondary: "#2f3136",
-            tertiary: "#202225",
-            input: "#40444b",
-            hover: "#4f545c",
-            active: "#5d636b",
-            message: "#40444b",
-            messageOwn: "#34383c",
+            primary: "#202124", // Darker background
+            secondary: "#292a2d", // Subtle contrast
+            tertiary: "#35363a", // For elements that need to stand out
+            input: "#3c3c3f", // More visible input fields
+            hover: "#3c4043", // Lighter hover state
+            active: "#5f6368", // Active state
+            message: "#3c3c3f", // Message background
+            messageOwn: "#174ea6", // Own message background (matches primary theme)
           },
           text: {
-            primary: "#dcddde",
-            secondary: "#b9bbbe",
-            tertiary: "#72767d",
+            primary: "#e8eaed", // Brighter primary text
+            secondary: "#9aa0a6", // Secondary text
+            tertiary: "#80868b", // Tertiary/disabled text
           },
           border: {
-            primary: "#202225",
-            secondary: "#40444b",
+            primary: "#3c4043", // Stronger border color
+            secondary: "#5f6368", // Secondary border
           },
         },
       },

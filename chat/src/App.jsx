@@ -12,6 +12,7 @@ import Login from "./components/auth/Login";
 import Register from "./components/auth/Register";
 import Home from "./components/common/Home";
 import PrivateRoute from "./components/common/PrivateRoute";
+import SocketStatusBar from "./components/SocketStatusBar";
 
 /**
  * Main Application Component
@@ -65,6 +66,9 @@ function App() {
               }}
             >
               <ChatProvider>
+                {/* Socket connection status bar */}
+                <SocketStatusBar />
+                
                 {/* Chat specific error boundary */}
                 <ErrorBoundary context="chat-provider">
                   <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-dark-bg-primary transition-colors duration-300">

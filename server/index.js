@@ -9,6 +9,7 @@ const messageRoutes = require("./routes/messageRoutes"); // Import message route
 const userRoutes = require("./routes/userRoutes"); // Import user routes
 const socketAuth = require("./middleware/socketAuth"); // Import socket authentication middleware
 const { apiLimiter } = require("./middleware/rateLimiter"); // Import rate limiter
+const logger = require("./utils/logger"); // Import enhanced logging utilities
 const {
   createMessage,
   toggleMessageLike,
@@ -18,8 +19,29 @@ const {
   toggleReaction,
 } = require("./controllers/messageController");
 
-// Connect to MongoDB
-connectDB();
+// Connect to MongoDB with proper error handling
+let dbConnection;
+try {
+  dbConnection = connectDB();
+
+  // Check if we're using mock database fallback
+  dbConnection
+    .then((conn) => {
+      if (conn && conn.connection && conn.connection.isMockDB) {
+        logger.db.warn(
+          "Server running with mock database! This is a fallback mode."
+        );
+        console.log(
+          "\n⚠️ USING MOCK DATABASE - Some features will be limited ⚠️\n"
+        );
+      }
+    })
+    .catch((err) => {
+      logger.db.error("Failed to establish database connection:", err);
+    });
+} catch (error) {
+  logger.db.error("Fatal database connection error:", error);
+}
 
 const app = express();
 // Use PORT from .env or default to 4500
@@ -58,8 +80,26 @@ const io = new Server(server, {
   },
 });
 
+// Log the configured port
+console.log(
+  `Server configured to use port: ${port} (from .env: ${
+    process.env.PORT || "not set"
+  })`
+);
+
 // Apply socket authentication middleware
 io.use(socketAuth);
+
+// Log socket.io configuration
+console.log("Socket.IO configuration:", {
+  cors: {
+    origin: corsOptions.origin,
+    methods: corsOptions.methods,
+    credentials: corsOptions.credentials,
+  },
+  path: "/socket.io/",
+  transports: ["websocket", "polling"],
+});
 
 // Store connected users: { socketId: { id, username } }
 const connectedUsers = {};
@@ -71,9 +111,12 @@ io.on("connection", (socket) => {
       id: socket.user.id,
       username: socket.user.username,
     };
-    console.log(
-      `Authenticated user ${socket.user.username} (${socket.id}) connected`
-    );
+
+    logger.socket.info("User connected", {
+      socketId: socket.id,
+      userId: socket.user.id,
+      username: socket.user.username,
+    });
 
     // Broadcast user joined notification
     socket.broadcast.emit("userNotification", {
@@ -82,7 +125,9 @@ io.on("connection", (socket) => {
       timestamp: new Date(),
     });
   } else {
-    console.log(`Unauthenticated connection: ${socket.id}`);
+    logger.socket.warn("Unauthenticated connection rejected", {
+      socketId: socket.id,
+    });
     socket.disconnect(true);
     return;
   }
@@ -90,17 +135,37 @@ io.on("connection", (socket) => {
   // Listen for new messages
   socket.on("message", async (newMessageData) => {
     try {
+      const correlationId = newMessageData._meta?.correlationId || uuidv4();
+      logger.socket.info("Message received from client", {
+        socketId: socket.id,
+        userId: socket.user.id,
+        username: socket.user.username,
+        tempId: newMessageData.tempId,
+        correlationId,
+      });
+
       // Validate message text
       const text = newMessageData.text;
 
       // Basic validation
       if (!text || typeof text !== "string" || !text.trim()) {
+        logger.socket.warn("Message rejected: empty text", {
+          socketId: socket.id,
+          userId: socket.user.id,
+          correlationId,
+        });
         socket.emit("error", { message: "Message text is required" });
         return;
       }
 
       // Check message length
       if (text.length > 500) {
+        logger.socket.warn("Message rejected: too long", {
+          socketId: socket.id,
+          userId: socket.user.id,
+          textLength: text.length,
+          correlationId,
+        });
         socket.emit("error", {
           message: "Message is too long (max 500 characters)",
         });
@@ -110,23 +175,42 @@ io.on("connection", (socket) => {
       // Use authenticated user information from socket
       const userName = socket.user.username;
 
-      // Prepare message data
+      // Prepare message data with correlation ID for tracing
       const messageData = {
         user: userName, // Use the server-known username
         text: text.trim(), // Sanitize the message text
         timestamp: new Date(), // Add timestamp
         likes: 0, // Initialize likes
+        _meta: { correlationId, tempId: newMessageData.tempId },
       };
 
       // Save message to database
       const savedMessage = await createMessage(messageData);
 
+      // Add correlation ID to the response for client-side tracking
+      const messageResponse = {
+        ...savedMessage.toObject(),
+        tempId: newMessageData.tempId, // Return temp ID for optimistic UI update replacement
+      };
+
       // Broadcast the saved message to all clients
-      io.emit("sendMessage", savedMessage);
-      console.log("Message sent and saved:", savedMessage);
+      io.emit("sendMessage", messageResponse);
+
+      logger.socket.info("Message broadcast to all clients", {
+        messageId: savedMessage._id,
+        userId: socket.user.id,
+        tempId: newMessageData.tempId,
+        correlationId,
+      });
     } catch (error) {
-      console.error("Error handling message:", error);
-      // Optionally notify the client of the error
+      logger.socket.error("Error processing message", {
+        socketId: socket.id,
+        userId: socket.user?.id,
+        error: error.message,
+        stack: error.stack,
+      });
+
+      // Notify the client of the error
       socket.emit("error", { message: "Failed to process message" });
     }
   });
@@ -327,10 +411,17 @@ io.on("connection", (socket) => {
   });
 
   // Handle disconnection
-  socket.on("disconnect", async () => {
+  socket.on("disconnect", async (reason) => {
     if (connectedUsers[socket.id]) {
       const { username, id } = connectedUsers[socket.id];
-      console.log(`User ${username} (${socket.id}) disconnected.`);
+
+      logger.socket.info("User disconnected", {
+        socketId: socket.id,
+        userId: id,
+        username,
+        reason,
+        onlineUsersCount: Object.keys(connectedUsers).length - 1,
+      });
 
       // Broadcast user left notification
       socket.broadcast.emit("userNotification", {
@@ -344,13 +435,20 @@ io.on("connection", (socket) => {
         const User = require("./models/user");
         await User.findByIdAndUpdate(id, { isOnline: false });
       } catch (error) {
-        console.error("Error updating user online status:", error);
+        logger.socket.error("Failed to update user online status", {
+          userId: id,
+          username,
+          errorMessage: error.message,
+          stack: error.stack,
+        });
       }
 
       // Remove user from connected users
       delete connectedUsers[socket.id];
     } else {
-      console.log(`Unknown user disconnected: ${socket.id}`);
+      logger.socket.warn("Unknown user disconnected", {
+        socketId: socket.id,
+      });
     }
   });
 
@@ -365,5 +463,15 @@ io.on("connection", (socket) => {
 });
 
 server.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  console.log(`\n----- SERVER STARTED -----`);
+  console.log(`Server is running on port: ${port}`);
+  console.log(`Socket.IO is available at: ws://localhost:${port}/socket.io/`);
+  console.log(`HTTP API is available at: http://localhost:${port}/api/`);
+  console.log(`---------------------------\n`);
+
+  logger.app.info(`Server started successfully`, {
+    port,
+    environment: process.env.NODE_ENV || "development",
+    time: new Date().toISOString(),
+  });
 });

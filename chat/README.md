@@ -1,18 +1,26 @@
-# Chat Application
+# Real-time Chat Application
 
-A real-time chat application built with React, Socket.IO, and Node.js.
+A modern, scalable chat application built with React, Socket.IO, and Node.js.
 
 ## Features
 
-- Real-time messaging with Socket.IO
-- User authentication and authorization
-- Message editing and deletion
-- Message reactions and replies
-- Dark/light theme support
-- Offline status detection
-- Progressive Web App (PWA) support
-- Browser notifications
-- Error boundary protection
+- **Real-time Communication**: Instant messaging using Socket.IO
+- **User Management**: Authentication, authorization, and online status
+- **Message Features**: 
+  - Editing and deletion with history tracking
+  - Reactions with emoji support
+  - Threaded replies
+  - Offline message queueing
+- **UI/UX**: 
+  - Responsive design for all devices
+  - Dark/light theme support
+  - Accessibility features (ARIA attributes)
+  - Progressive Web App (PWA) capabilities
+- **Security & Reliability**:
+  - JWT authentication
+  - Input sanitization
+  - Error boundary protection
+  - Comprehensive error handling
 
 ## Getting Started
 
@@ -20,6 +28,7 @@ A real-time chat application built with React, Socket.IO, and Node.js.
 
 - Node.js (v14+)
 - npm or yarn
+- MongoDB (local or Atlas)
 
 ### Installation
 
@@ -48,7 +57,12 @@ cd ../server
 cp .env.example .env
 ```
 
-4. Start the development servers:
+4. Configure your environment variables:
+   - `REACT_APP_SOCKET_ENDPOINT`: Socket.IO server endpoint
+   - `MONGO_URI`: MongoDB connection string
+   - `JWT_SECRET`: Secret for JWT token signing
+
+5. Start the development servers:
 
 ```bash
 # Start client
@@ -62,97 +76,118 @@ npm start
 
 ## Testing
 
-The application includes comprehensive unit tests for critical components. Run the tests with:
+The application includes comprehensive unit tests for critical components:
 
 ```bash
 cd chat
 npm test
 ```
 
-Major tested components include:
-- ChatContext: Socket connection, message operations
-- ThemeContext: Theme switching functionality
-- App: Routing and error boundaries
-- Chat component: UI rendering and message handling
-- MessageActions: Message operations (edit, delete, reaction)
+### Test Coverage
+
+- **Context Tests**: Authentication, chat operations, theme functionality
+- **Component Tests**: UI rendering and interaction
+- **Utils Tests**: Offline queue, notifications, error handling
+
+Run with coverage report:
+
+```bash
+npm test -- --coverage
+```
 
 ## Continuous Integration
 
-This project uses GitHub Actions for CI. The workflow:
-- Runs on every push and pull request to main/master branches
-- Installs dependencies
-- Runs linter checks
-- Executes unit tests
-- Generates and uploads a coverage report
+This project uses GitHub Actions for CI/CD:
 
-## Project Structure
+- **Pipeline Stages**:
+  - Linting and code quality checks
+  - Unit and integration tests
+  - Build verification
+  - Coverage reporting
+
+## Project Architecture
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for detailed architecture documentation.
+
+### Directory Structure
 
 ```
-chat/
+chat/                   # Frontend application
 ├── public/             # Static files
 ├── src/
 │   ├── components/     # React components
 │   │   ├── auth/       # Authentication components
 │   │   ├── chat/       # Chat-related components
 │   │   └── common/     # Shared components
-│   ├── context/        # React context providers
-│   ├── services/       # Service modules
-│   └── utils/          # Utility functions
-└── server/
-    ├── config/         # Server configuration
-    ├── controllers/    # Request handlers
+│   ├── context/        # React contexts (modular with domain reducers)
+│   ├── services/       # Service classes
+│   └── utils/          # Helper functions
+└── server/             # Backend application
+    ├── config/         # Configuration files
+    ├── controllers/    # Request handlers (with utility extraction)
     ├── middleware/     # Express middleware
-    ├── models/         # Database models
+    ├── models/         # Mongoose models
     └── routes/         # API routes
 ```
 
-## Code Architecture
+## Key Design Patterns
 
-### Client Architecture
+### Frontend
+- **Component Composition**: Smaller, focused components
+- **Context API with Domain Reducers**: Modular state management
+- **Optimistic Updates**: Immediate UI feedback with server validation
+- **Memoization**: Performance optimization with React.memo and useMemo
+- **Higher-Order Components**: For shared functionality
 
-The client is built using React with context-based state management:
+### Backend
+- **Controller-Service Pattern**: Separation of concerns
+- **Middleware Chain**: For authentication and validation
+- **Repository Pattern**: Database access abstraction
+- **Observer Pattern**: For real-time events
+- **Error Handler Pattern**: Consistent error management
 
-- **Context Providers**:
-  - `AuthContext`: Manages user authentication state
-  - `ChatContext`: Handles messaging with socket connections
-  - `ThemeContext`: Controls theme preferences
+## Recent Improvements
 
-- **Key Components**:
-  - `App`: Main component with routing and error boundaries
-  - `Chat`: Main chat interface, message display
-  - `MessageList`: Renders chat messages (extracted from Chat for better code organization)
-  - `MessageActions`: UI for message operations (edit, delete, react)
-  - `HeaderComponent`: Navigation and app controls
-  - `ErrorBoundary`: Catches and handles runtime errors
+### Refactored Backend Controllers
+- Extracted utility functions for common operations
+- Improved error handling with consistent patterns
+- Enhanced parameter validation
 
-### Server Architecture
+### Enhanced Frontend Components
+- Split large components into smaller, focused ones
+- Improved accessibility with proper ARIA attributes
+- Added memoization for better performance
+- Enhanced error handling
 
-The server uses Express.js with Socket.IO for real-time communication:
+### State Management Improvements
+- Modularized reducers by domain
+- Enhanced offline support with optimistic updates
+- Improved socket connection handling
 
-- **API Routes**: RESTful endpoints for authentication and data retrieval
-- **Socket Events**: Real-time messaging and notifications
-- **Database Models**: User and message schemas
-- **Middleware**: Authentication, validation, and rate limiting
+## Development Roadmap
 
-## Future Improvements
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the detailed roadmap with priorities.
 
-### UX Enhancements
-- Implement loading skeletons instead of spinners for better perceived performance
-- Add keyboard shortcuts for common actions
-- Improve mobile responsiveness for message actions
-- Add read receipts functionality
-- Implement message threading for better conversation flow
+### Upcoming Features
+- Enhanced error handling system
+- Improved offline support and conflict resolution
+- Performance optimizations for large message lists
+- Enhanced security features
+- Accessibility improvements (WCAG compliance)
+- UI component library and design system
+- User profile and settings management
+- Advanced messaging features (attachments, formatting)
+- Comprehensive test coverage
 
-### Technical Improvements
-- Add end-to-end testing with Cypress
-- Implement WebRTC for audio/video chat
-- Add file upload capabilities
-- Implement message search functionality
-- Add support for markdown in messages
+## Contributing
 
-## Contributors
+1. Fork the repository
+2. Create your feature branch: `git checkout -b feature/amazing-feature`
+3. Commit your changes: `git commit -m 'Add some amazing feature'`
+4. Push to the branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
 
-- [Your Name](https://github.com/yourusername)
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for coding standards and guidelines.
 
 ## License
 

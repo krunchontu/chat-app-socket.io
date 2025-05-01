@@ -30,6 +30,22 @@ export const showSuccessToast = (message, options = {}) => {
 };
 
 /**
+ * Show an info toast notification
+ * @param {string} message - The message to display
+ * @param {Object} options - Custom toast options
+ */
+export const showInfoToast = (message, options = {}) => {
+  return toast(message, {
+    ...defaultOptions,
+    icon: "🔵",
+    style: {
+      borderLeft: "4px solid #3498db",
+    },
+    ...options,
+  });
+};
+
+/**
  * Show an error toast notification
  * @param {string} message - The message to display
  * @param {Object} options - Custom toast options
