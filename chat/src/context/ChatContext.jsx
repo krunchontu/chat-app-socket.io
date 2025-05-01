@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useEffect } from "react";
 import { useAuth } from "../components/common/AuthContext";
 import useSocketConnection from "../hooks/useSocketConnection";
 import useMessageState from "../hooks/useMessageState";
@@ -30,7 +30,7 @@ export const ChatProvider = ({ children }) => {
     deleteMessage,
     replyToMessage,
     toggleReaction,
-    handleOfflineMessage, // Exposing for potential direct use if needed
+    //handleOfflineMessage, // Exposing for potential direct use if needed
   } = useMessageOperations(
     socket,
     isConnected,
