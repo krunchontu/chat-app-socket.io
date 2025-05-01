@@ -157,6 +157,7 @@ export const ChatProvider = ({ children }) => {
     messageError: messageState.error,
     loadMoreMessages,
     clearMessageError,
+    dispatchMessages, // Expose for direct optimistic updates
 
     // Notification state
     onlineUsers: notificationState.onlineUsers,

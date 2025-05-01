@@ -35,7 +35,9 @@ const ChatApp = () => {
     replyingTo,
     loadMoreMessages, 
     replyToMessage, 
-    setReplyingTo
+    setReplyingTo,
+    // We need the dispatchMessages function for optimistic updates
+    dispatchMessages
   } = useChat();
   
   const [inputText, setInputText] = useState("");
@@ -72,6 +74,7 @@ const ChatApp = () => {
   /**
    * Handle sending a new message.
    * Performs validation, determines message type, and emits appropriate event.
+   * Now includes optimistic UI updates to show messages immediately.
    */
   const handleMessageSend = useCallback(() => {
     const trimmedText = inputText.trim();
@@ -93,21 +96,45 @@ const ChatApp = () => {
       return;
     }
     
+    // Generate a temporary ID for optimistic updates
+    const tempId = `temp-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const timestamp = new Date().toISOString();
+    // Use the user object from the component scope, not from useAuth() which can't be called here
+    
+    // Create optimistic message object
+    const optimisticMessage = {
+      id: tempId,
+      text: trimmedText,
+      user: user.username,
+      timestamp,
+      tempId, // Mark as temporary
+      parentId: replyingTo ? replyingTo.id : null
+    };
+    
     // Check if replying to a message
     if (replyingTo) {
       // Send reply via context handler
-      replyToMessage(replyingTo.id, trimmedText);
-      logger.debug("Sending reply message", { replyToId: replyingTo.id });
+      replyToMessage(replyingTo.id, trimmedText, optimisticMessage);
+      logger.debug("Sending reply message", { replyToId: replyingTo.id, tempId });
     } else {
-      // Regular message
-      logger.debug("Sending regular message");
-      socket.emit("message", { text: trimmedText });
+      // Regular message - add optimistic update to state
+      logger.debug("Sending regular message", { tempId });
+      // Add to messages array for immediate UI update
+      dispatchMessages({ 
+        type: "ADD_MESSAGE", 
+        payload: optimisticMessage 
+      });
+      // Then emit to server
+      socket.emit("message", { text: trimmedText, tempId });
     }
     
     // Clear input and UI state
     setInputText("");
     setShowEmojiPicker(false);
-  }, [inputText, socket, isConnected, replyingTo, replyToMessage]);
+    
+    // Scroll to bottom to show the new message
+    setTimeout(() => scrollToBottom("auto"), 50);
+  }, [inputText, socket, isConnected, replyingTo, replyToMessage, dispatchMessages, scrollToBottom, user]);
 
 
   /**

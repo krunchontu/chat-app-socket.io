@@ -244,7 +244,7 @@ const useMessageOperations = (
 
   // Reply to a message
   const replyToMessage = useCallback(
-    async (parentIdInput, text) => {
+    async (parentIdInput, text, customOptimisticMessage = null) => {
       if (!user) {
         dispatchMessages({
           type: "SET_ERROR",
@@ -272,11 +272,10 @@ const useMessageOperations = (
         return false;
       }
 
-      const optimisticReply = createOptimisticMessage(
-        text,
-        user.username,
-        normalizedParentId
-      );
+      // Use the provided optimistic message or create a new one
+      const optimisticReply =
+        customOptimisticMessage ||
+        createOptimisticMessage(text, user.username, normalizedParentId);
       dispatchMessages({ type: "ADD_MESSAGE", payload: optimisticReply }); // Optimistic UI
 
       // Clear the replying state in the UI
