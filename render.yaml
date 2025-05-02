@@ -1,0 +1,64 @@
+# Render deployment configuration
+services:
+  # Backend API Service
+  - type: web
+    name: chat-app-backend
+    env: docker
+    repo: https://github.com/krunchontu/chat-app-socket.io
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4500
+      - key: JWT_SECRET
+        sync: false
+        description: "Secret key for JWT token generation"
+      - key: MONGO_URI
+        sync: false
+        description: "MongoDB Atlas connection string"
+      - key: NEW_RELIC_LICENSE_KEY
+        sync: false
+        description: "New Relic license key for APM"
+      - key: LOGDNA_KEY
+        sync: false
+        description: "LogDNA ingestion key for centralized logging"
+      - key: CLIENT_ORIGIN
+        fromService:
+          name: chat-app-frontend
+          type: web
+          property: url
+    autoDeploy: true
+
+  # Frontend Static Site
+  - type: web
+    name: chat-app-frontend
+    env: docker
+    repo: https://github.com/krunchontu/chat-app-socket.io
+    dockerfilePath: ./chat/Dockerfile
+    dockerContext: ./chat
+    plan: free
+    envVars:
+      - key: REACT_APP_API_URL
+        fromService:
+          name: chat-app-backend
+          type: web
+          property: url
+      - key: REACT_APP_SOCKET_URL
+        fromService:
+          name: chat-app-backend
+          type: web
+          property: url
+    autoDeploy: true
+
+# Note: MongoDB should be set up as an external database
+# Recommended to use MongoDB Atlas for production
+databases:
+  # You can uncomment this section if you want to use Render's managed PostgreSQL
+  # - name: chat-app-db
+  #   plan: free
+  #   databaseName: chatapp
+  #   user: chatapp_user

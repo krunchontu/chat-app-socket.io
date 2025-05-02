@@ -1,204 +1,177 @@
-# Dialoque
+# Chat App with Socket.IO
 
-A secure, accessible real-time chat application built with React, Socket.IO, Express, and MongoDB. This application provides user authentication, real-time messaging, message reactions, and user presence tracking with a focus on security, accessibility, and error handling.
+A full-stack real-time chat application built with Node.js, Express, Socket.IO, React, and MongoDB.
 
-[![WCAG 2.1 AA Compliant](https://img.shields.io/badge/WCAG%202.1-AA%20Compliant-green)](https://www.w3.org/WAI/standards-guidelines/wcag/)
-[![Keyboard Accessible](https://img.shields.io/badge/Keyboard-Accessible-blue)](https://www.w3.org/TR/WCAG21/#keyboard-accessible)
-[![MIT License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
-[![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+## Project Structure
 
-## Architecture
+- `/server` - Backend API and Socket.IO server built with Node.js and Express
+- `/chat` - Frontend React application
 
-The application follows a client-server architecture:
+## Containerization & Deployment
 
-- **Client**: React-based frontend with Socket.IO for real-time communication
-- **Server**: Express.js server with Socket.IO and MongoDB integration
-- **Authentication**: JWT-based authentication flow
-- **Database**: MongoDB for storing users and messages
+This project is fully containerized and set up with CI/CD for automated deployment.
 
-```
-┌────────────────┐      ┌─────────────────────┐      ┌───────────────┐
-│                │      │                     │      │               │
-│  React Client  │<────>│  Express/Socket.IO  │<────>│   MongoDB     │
-│                │      │  Server             │      │   Database    │
-└────────────────┘      └─────────────────────┘      └───────────────┘
-```
+### Docker Configuration
 
-## Features
+The application is containerized using Docker:
 
-- **User Authentication**: Secure login/register system with JWT
-- **Real-time Messaging**: Instant message delivery using Socket.IO
-- **Message Reactions**: Like/unlike messages in real-time
-- **User Presence**: Track online users and notify when users join/leave
-- **Emoji Support**: Built-in emoji picker for expressing emotions
-- **Message History**: Load previous messages on connection
-- **Responsive Design**: Works on desktop and mobile devices
-- **Security**: Input validation, rate limiting, and secure authentication
-- **Modern UI**: Sleek interface built with Tailwind CSS
-- **Toast Notifications**: Intuitive feedback system using React Hot Toast
-- **Dark/Light Mode**: Theme system with persistent preferences
+- **Backend**: Node.js container with monitoring and logging capabilities
+- **Frontend**: Multi-stage build with Node.js for building and Nginx for serving the static files
+- **Development**: Docker Compose for local development with MongoDB included
 
-## Technologies
+### CI/CD Pipeline
 
-- **Frontend**: React, React Router, Socket.IO Client
-- **Backend**: Node.js, Express.js, Socket.IO Server
-- **Database**: MongoDB with Mongoose ODM
-- **Authentication**: JWT (JSON Web Tokens)
-- **UI Framework**: Tailwind CSS for responsive and consistent design
-- **Notifications**: React Hot Toast for toast notifications
-- **Security**: bcrypt for password hashing, express-rate-limit for rate limiting
+A complete CI/CD pipeline is configured using GitHub Actions with branch-specific behavior:
 
-## Getting Started
+1. **Testing**: Runs on all branches (main, develop, release)
+   - Executes unit tests for both frontend and backend
+   - Ensures code quality and prevents regressions
+
+2. **Build**: Runs on develop and release branches
+   - Creates and pushes Docker images to GitHub Container Registry
+   - Tags images with appropriate metadata for deployment
+
+3. **Deploy**: Runs only on the release branch
+   - Automatically deploys to Render when changes are pushed
+   - Performs health checks to verify deployment success
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for details on our branch strategy and workflow.
+
+### Deployment
+
+The application is deployed to Render with the following components:
+
+- **Backend Service**: Containerized Node.js application
+- **Frontend Service**: Containerized Nginx serving React static files
+- **Database**: MongoDB Atlas (external database service)
+
+## Monitoring & Logging
+
+The application includes comprehensive monitoring and logging:
+
+- **APM**: New Relic for application performance monitoring
+- **Logging**: LogDNA for centralized log management
+- **Health Checks**: Docker health checks for container monitoring
+
+## Local Development
 
 ### Prerequisites
 
-- Node.js (v14 or higher)
-- MongoDB instance (local or Atlas)
+- Docker and Docker Compose
+- Node.js (v18+)
+- MongoDB (optional if using Docker)
 
-### Installation
+### Running with Docker
 
-1. Clone the repository:
-   ```bash
-   git clone [repository URL]
-   cd chat-app-socket.io
-   ```
+```bash
+# Start all services
+docker-compose up
 
-2. Install dependencies for both client and server:
-   ```bash
-   # Install server dependencies
-   cd server
-   npm install
-
-   # Install client dependencies
-   cd ../chat
-   npm install
-   ```
-
-3. Set up environment variables:
-   - Create `.env` files in both `server/` and `chat/` directories based on the provided `.env.example` templates
-   - Update the MongoDB connection string in `server/.env`
-   - Set a strong JWT secret in `server/.env`
-   - Ensure the Socket.IO endpoints match in both config files
-
-4. Start the development servers:
-   ```bash
-   # Start server (from server directory)
-   npm start
-
-   # Start client (from chat directory)
-   npm start
-   ```
-
-5. Open your browser and navigate to `http://localhost:3000` to use the application
-
-## UI Framework
-
-The application uses Tailwind CSS for styling, offering several advantages:
-
-1. **Consistent Design Language**: Uniform styling across components
-2. **Responsive by Default**: Mobile-first approach with easy breakpoint handling
-3. **Dark Mode Support**: Integrated with a theme system for light/dark preferences
-4. **Performance**: Only includes the CSS you actually use
-5. **Developer Experience**: Fast styling workflow directly in markup
-
-We implement a theme system that respects user preferences and persists their choice:
-
-```javascript
-// Example of the theme toggling functionality
-const toggleTheme = () => {
-  setTheme(prevTheme => (prevTheme === "dark" ? "light" : "dark"));
-};
+# Backend API will be available at http://localhost:4500
+# Frontend will be available at http://localhost:3000
 ```
 
-## Toast Notification System
+You can also use the provided test script to check your Docker setup:
 
-The application uses React Hot Toast for notifications, providing a streamlined way to show:
-
-- Success messages
-- Error alerts
-- Connection status updates
-- New message notifications
-
-The toast system is integrated with both the UI theme and accessibility standards:
-
-```javascript
-// Example of custom toast notification
-showSuccessToast("Account created successfully!");
-showErrorToast("Unable to connect to server.");
+**On Unix/Linux/Mac:**
+```bash
+# Make the script executable
+chmod +x test-docker-setup.sh
+# Run the setup test
+./test-docker-setup.sh
 ```
 
-## Security Best Practices
+**On Windows:**
+```powershell
+# Run the setup test
+powershell -ExecutionPolicy Bypass -File .\test-docker-setup.ps1
+```
 
-1. **Environment Variables**: Never commit sensitive information like database credentials or JWT secrets. Use .env files (included in .gitignore).
-2. **Input Validation**: All user inputs are validated both on client and server.
-3. **Rate Limiting**: API endpoints are protected against brute force attacks.
-4. **Authentication**: JWT tokens with proper expiration and server-side validation.
-5. **Password Storage**: Passwords are hashed using bcrypt before storage.
-6. **CORS Protection**: Configured to accept connections only from trusted origins.
+### Running Without Docker
 
-## Accessibility Features
+#### Backend
 
-The chat application follows WCAG 2.1 AA guidelines for accessibility:
+```bash
+cd server
+npm install
+cp .env.example .env  # Configure your environment variables
+npm start
+```
 
-1. **Keyboard Navigation**: The entire application is usable with keyboard alone.
-2. **Screen Reader Support**:
-   - Proper ARIA attributes for dynamic content
-   - Semantic HTML structure
-   - Accessible form labels and error messages
-3. **Focus Management**: Visual focus indicators and proper focus control
-4. **Color Contrast**: Meets WCAG AA requirements for text contrast
-5. **Responsive Design**: Accessible on various screen sizes and devices
-6. **Error Handling**: Clear error messages with instructions for recovery
-7. **Alternative Text**: Non-text content contains accessible alternatives
+#### Frontend
 
-## Error Handling and Reliability
+```bash
+cd chat
+npm install
+npm start
+```
 
-The application implements a robust error handling system:
+## Environment Variables
 
-1. **Centralized Error Service**:
-   - Consistent error handling across components
-   - Categorized errors (network, validation, authentication, etc.)
-   - Severity levels for appropriate handling
-2. **React Error Boundaries**:
-   - Component isolation prevents cascading failures
-   - Context-specific error recovery strategies
-   - User-friendly error messages
-3. **Connection Resilience**:
-   - Socket reconnection strategies
-   - Visual connection status indicators
-   - Graceful degradation during connection issues
-4. **Structured Logging**:
-   - Comprehensive error tracking
-   - Context-aware error reporting
-   - Privacy-conscious data logging
+### Backend
 
-See the [CHANGELOG.md](CHANGELOG.md) for detailed information about recent improvements.
+See `.env.example` in the server directory for required environment variables.
 
-## Deployment
+### Frontend
 
-### Server Deployment
-1. Set up a Node.js hosting environment (Heroku, AWS, Digital Ocean, etc.)
-2. Configure environment variables for production
-3. Set up a MongoDB Atlas cluster or other MongoDB hosting solution
-4. Deploy the server code, ensuring the PORT variable is properly set
+See `.env.example` in the chat directory for required environment variables.
 
-### Client Deployment
-1. Build the production version of the React app: `npm run build`
-2. Deploy the static files to a static hosting service (Netlify, Vercel, etc.)
-3. Ensure the REACT_APP_SOCKET_ENDPOINT points to your deployed server
+## Render Deployment
 
-## Contributing
+This project includes a `render.yaml` file for easy deployment to Render. To deploy:
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+1. Fork/clone this repository
+2. Sign up for a Render account
+3. Connect your GitHub repository to Render
+4. Configure the required environment variables
+5. Deploy the services
 
-## License
+## GitHub Actions Secrets
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+For the CI/CD pipeline to work, you need to configure these GitHub secrets:
 
-## Acknowledgements
+- `RENDER_API_KEY`: API key for Render
+- `RENDER_BACKEND_SERVICE_ID`: ID of your Render backend service
+- `RENDER_FRONTEND_SERVICE_ID`: ID of your Render frontend service
+- `BACKEND_URL`: URL of your deployed backend application
+- `NEW_RELIC_LICENSE_KEY`: Your New Relic license key
+- `LOGDNA_KEY`: Your LogDNA ingestion key
 
-- Socket.IO team for their excellent real-time communication library
-- MongoDB team for their reliable database solution
-- React team for their powerful frontend framework
-- Tailwind Labs for their utility-first CSS framework
-- React Hot Toast for the intuitive notification system
+## Monitoring Setup
+
+### New Relic
+
+1. Sign up for a New Relic account
+2. Obtain your license key
+3. Add it to your environment variables and GitHub secrets
+
+### LogDNA
+
+1. Sign up for a LogDNA account
+2. Obtain your ingestion key
+3. Add it to your environment variables and GitHub secrets
+
+## MongoDB Atlas Setup
+
+Since this project uses MongoDB Atlas instead of a local MongoDB instance:
+
+1. **Create a MongoDB Atlas account**: Sign up at [https://www.mongodb.com/cloud/atlas](https://www.mongodb.com/cloud/atlas)
+
+2. **Create a new cluster**: Follow the Atlas UI to create a free tier cluster
+
+3. **Set up database access**:
+   - Create a database user with appropriate permissions
+   - Set up network access (IP allow list or allow access from anywhere for development)
+
+4. **Get your connection string**:
+   - Click "Connect" on your cluster
+   - Select "Connect your application"
+   - Copy the connection string
+
+5. **Add to environment variables**:
+   - Add the connection string to your `.env` file as `MONGO_URI`
+   - Make sure to replace `<username>`, `<password>`, and `<dbname>` in the connection string
+
+6. **For production**:
+   - Add the connection string to your Render environment variables
+   - Add as a GitHub secret named `MONGO_URI` for CI/CD
