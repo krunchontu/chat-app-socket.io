@@ -49,7 +49,10 @@ const port = process.env.PORT || 4500;
 
 // Configure CORS properly
 const corsOptions = {
-  origin: process.env.CLIENT_ORIGIN || "http://localhost:3000",
+  origin: process.env.CLIENT_ORIGIN || [
+    "http://localhost:3000",
+    "https://chat-app-frontend-hgqg.onrender.com",
+  ],
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true, // Allow cookies for authentication if needed
   optionsSuccessStatus: 204,
@@ -78,6 +81,8 @@ const io = new Server(server, {
     methods: corsOptions.methods,
     credentials: corsOptions.credentials,
   },
+  path: "/socket.io/",
+  transports: ["websocket", "polling"],
 });
 
 // Log the configured port

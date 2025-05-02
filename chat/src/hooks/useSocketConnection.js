@@ -7,8 +7,24 @@ import ErrorService, {
 } from "../services/ErrorService";
 import { createLogger } from "../utils/logger";
 
-const ENDPOINT = process.env.REACT_APP_SOCKET_URL || "http://localhost:4500/";
+// Determine if we're in production based on hostname
+const isProduction = window.location.hostname !== "localhost";
+// In production, use the same origin for socket connection with /socket.io path
+const productionEndpoint = `${window.location.protocol}//${window.location.hostname}/socket.io`;
+// Use environment variable if available, otherwise use localhost in development, or same origin in production
+const ENDPOINT =
+  process.env.REACT_APP_SOCKET_URL ||
+  (isProduction ? productionEndpoint : "http://localhost:4500/");
 const logger = createLogger("useSocketConnection");
+
+// Log the selected endpoint for debugging
+logger.info("Socket endpoint configuration:", {
+  endpoint: ENDPOINT,
+  isProduction,
+  hostname: window.location.hostname,
+  env: process.env.NODE_ENV,
+  socketUrl: process.env.REACT_APP_SOCKET_URL,
+});
 
 /**
  * Custom hook to manage the Socket.IO connection lifecycle.
