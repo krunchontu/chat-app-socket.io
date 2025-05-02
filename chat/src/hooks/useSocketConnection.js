@@ -7,8 +7,7 @@ import ErrorService, {
 } from "../services/ErrorService";
 import { createLogger } from "../utils/logger";
 
-const ENDPOINT =
-  process.env.REACT_APP_SOCKET_ENDPOINT || "http://localhost:4500/";
+const ENDPOINT = process.env.REACT_APP_SOCKET_URL || "http://localhost:4500/";
 const logger = createLogger("useSocketConnection");
 
 /**

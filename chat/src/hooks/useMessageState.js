@@ -5,7 +5,7 @@ import ErrorService from "../services/ErrorService";
 import { createLogger } from "../utils/logger";
 
 const API_BASE_URL =
-  (process.env.REACT_APP_SOCKET_ENDPOINT || "http://localhost:4501/").replace(
+  (process.env.REACT_APP_API_URL || "http://localhost:4500/").replace(
     /\/$/,
     ""
   ) + "/api";

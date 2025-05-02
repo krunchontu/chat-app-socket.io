@@ -172,8 +172,9 @@ export const AuthProvider = ({ children }) => {
    */
   const login = async (username, password) => {
     try {
+      const API_URL = process.env.REACT_APP_API_URL || "http://localhost:4500";
       const response = await axios.post(
-        `${process.env.REACT_APP_SOCKET_ENDPOINT}/api/users/login`,
+        `${API_URL}/api/users/login`,
         { username, password }
       );
       
@@ -243,8 +244,9 @@ export const AuthProvider = ({ children }) => {
    */
   const register = async (userData) => {
     try {
+      const API_URL = process.env.REACT_APP_API_URL || "http://localhost:4500";
       const response = await axios.post(
-        `${process.env.REACT_APP_SOCKET_ENDPOINT}/api/users/register`,
+        `${API_URL}/api/users/register`,
         userData
       );
       
@@ -288,7 +290,8 @@ export const AuthProvider = ({ children }) => {
     try {
       // Call logout endpoint if needed
       if (user) {
-        await axios.post(`${process.env.REACT_APP_SOCKET_ENDPOINT}/api/users/logout`);
+        const API_URL = process.env.REACT_APP_API_URL || "http://localhost:4500";
+        await axios.post(`${API_URL}/api/users/logout`);
         
         // Log successful logout
         ErrorService.logError(

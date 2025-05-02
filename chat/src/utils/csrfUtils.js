@@ -31,7 +31,9 @@ export const getCSRFToken = async () => {
 export const fetchCSRFToken = async () => {
   try {
     const response = await axios.get(
-      `${process.env.REACT_APP_SOCKET_ENDPOINT}/api/users/csrf-token`
+      `${
+        process.env.REACT_APP_API_URL || "http://localhost:4500"
+      }/api/users/csrf-token`
     );
 
     const token = response.data.csrfToken;
