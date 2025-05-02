@@ -56,6 +56,8 @@ const corsOptions = {
       : [
           "http://localhost:3000",
           "https://chat-app-frontend-hgqg.onrender.com",
+          // Include both with and without protocol for better compatibility
+          "chat-app-frontend-hgqg.onrender.com",
         ];
 
     // Allow requests with no origin (like mobile apps, curl, etc)
@@ -81,7 +83,11 @@ app.use(cors(corsOptions));
 console.log("CORS configuration:", {
   allowedOrigins: process.env.CLIENT_ORIGIN
     ? process.env.CLIENT_ORIGIN.split(",")
-    : ["http://localhost:3000", "https://chat-app-frontend-hgqg.onrender.com"],
+    : [
+        "http://localhost:3000",
+        "https://chat-app-frontend-hgqg.onrender.com",
+        "chat-app-frontend-hgqg.onrender.com",
+      ],
   methods: corsOptions.methods,
   credentials: corsOptions.credentials,
 });
@@ -109,6 +115,8 @@ const io = new Server(server, {
         : [
             "http://localhost:3000",
             "https://chat-app-frontend-hgqg.onrender.com",
+            // Include both with and without protocol for better compatibility
+            "chat-app-frontend-hgqg.onrender.com",
           ];
 
       // Allow requests with no origin
@@ -149,6 +157,7 @@ console.log("Socket.IO configuration:", {
       : [
           "http://localhost:3000",
           "https://chat-app-frontend-hgqg.onrender.com",
+          "chat-app-frontend-hgqg.onrender.com",
         ],
     methods: corsOptions.methods,
     credentials: corsOptions.credentials,
@@ -574,13 +583,32 @@ io.on("connection", (socket) => {
 server.listen(port, () => {
   console.log(`\n----- SERVER STARTED -----`);
   console.log(`Server is running on port: ${port}`);
-  console.log(`Socket.IO is available at: ws://localhost:${port}/socket.io/`);
-  console.log(`HTTP API is available at: http://localhost:${port}/api/`);
+
+  // Use environment-specific hostname
+  const isProduction = process.env.NODE_ENV === "production";
+  const hostname = isProduction
+    ? process.env.HOST || "chat-app-backend-hgqg.onrender.com"
+    : "localhost";
+
+  const wsProtocol = isProduction ? "wss" : "ws";
+  const httpProtocol = isProduction ? "https" : "http";
+
+  console.log(
+    `Socket.IO is available at: ${wsProtocol}://${hostname}${
+      isProduction ? "" : `:${port}`
+    }/socket.io/`
+  );
+  console.log(
+    `HTTP API is available at: ${httpProtocol}://${hostname}${
+      isProduction ? "" : `:${port}`
+    }/api/`
+  );
   console.log(`---------------------------\n`);
 
   logger.app.info(`Server started successfully`, {
     port,
     environment: process.env.NODE_ENV || "development",
+    hostname,
     time: new Date().toISOString(),
   });
 });
