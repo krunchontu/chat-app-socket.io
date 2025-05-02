@@ -49,17 +49,42 @@ const port = process.env.PORT || 4500;
 
 // Configure CORS properly
 const corsOptions = {
-  origin: process.env.CLIENT_ORIGIN || [
-    "http://localhost:3000",
-    "https://chat-app-frontend-hgqg.onrender.com",
-  ],
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  origin: function (origin, callback) {
+    // Get allowed origins from environment or default to localhost and render URL
+    const allowedOrigins = process.env.CLIENT_ORIGIN
+      ? process.env.CLIENT_ORIGIN.split(",")
+      : [
+          "http://localhost:3000",
+          "https://chat-app-frontend-hgqg.onrender.com",
+        ];
+
+    // Allow requests with no origin (like mobile apps, curl, etc)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes("*")) {
+      callback(null, true);
+    } else {
+      console.log(`CORS blocked request from origin: ${origin}`);
+      console.log(`Allowed origins are: ${allowedOrigins.join(", ")}`);
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true, // Allow cookies for authentication if needed
   optionsSuccessStatus: 204,
 };
 
 // Apply CORS middleware with options
 app.use(cors(corsOptions));
+
+// Log CORS configuration
+console.log("CORS configuration:", {
+  allowedOrigins: process.env.CLIENT_ORIGIN
+    ? process.env.CLIENT_ORIGIN.split(",")
+    : ["http://localhost:3000", "https://chat-app-frontend-hgqg.onrender.com"],
+  methods: corsOptions.methods,
+  credentials: corsOptions.credentials,
+});
 app.use(express.json()); // Parse JSON bodies
 
 // Basic home route
@@ -77,7 +102,28 @@ const server = http.createServer(app);
 // Initialize Socket.IO Server with CORS configuration matching Express settings
 const io = new Server(server, {
   cors: {
-    origin: corsOptions.origin,
+    origin: function (origin, callback) {
+      // Get allowed origins from environment or default to localhost and render URL
+      const allowedOrigins = process.env.CLIENT_ORIGIN
+        ? process.env.CLIENT_ORIGIN.split(",")
+        : [
+            "http://localhost:3000",
+            "https://chat-app-frontend-hgqg.onrender.com",
+          ];
+
+      // Allow requests with no origin
+      if (!origin) return callback(null, true);
+
+      if (
+        allowedOrigins.indexOf(origin) !== -1 ||
+        allowedOrigins.includes("*")
+      ) {
+        callback(null, true);
+      } else {
+        console.log(`Socket.IO CORS blocked request from origin: ${origin}`);
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
+      }
+    },
     methods: corsOptions.methods,
     credentials: corsOptions.credentials,
   },
@@ -98,7 +144,12 @@ io.use(socketAuth);
 // Log socket.io configuration
 console.log("Socket.IO configuration:", {
   cors: {
-    origin: corsOptions.origin,
+    allowedOrigins: process.env.CLIENT_ORIGIN
+      ? process.env.CLIENT_ORIGIN.split(",")
+      : [
+          "http://localhost:3000",
+          "https://chat-app-frontend-hgqg.onrender.com",
+        ],
     methods: corsOptions.methods,
     credentials: corsOptions.credentials,
   },

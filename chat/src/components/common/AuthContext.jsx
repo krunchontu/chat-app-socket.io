@@ -172,7 +172,21 @@ export const AuthProvider = ({ children }) => {
    */
   const login = async (username, password) => {
     try {
-      const API_URL = process.env.REACT_APP_API_URL || "http://localhost:4500";
+      // In production, use relative URLs for API calls to avoid CORS issues
+      // This ensures API calls go to the same domain as the frontend
+      const isProduction = window.location.hostname !== "localhost";
+      const API_URL = isProduction 
+        ? "" // Use relative URL in production
+        : (process.env.REACT_APP_API_URL || "http://localhost:4500");
+      
+      // Log the API URL being used
+      console.log("Auth API URL:", { 
+        url: `${API_URL}/api/users/login`, 
+        isProduction, 
+        hostname: window.location.hostname,
+        env: process.env.NODE_ENV
+      });
+      
       const response = await axios.post(
         `${API_URL}/api/users/login`,
         { username, password }
@@ -244,7 +258,19 @@ export const AuthProvider = ({ children }) => {
    */
   const register = async (userData) => {
     try {
-      const API_URL = process.env.REACT_APP_API_URL || "http://localhost:4500";
+      // In production, use relative URLs for API calls to avoid CORS issues
+      const isProduction = window.location.hostname !== "localhost";
+      const API_URL = isProduction 
+        ? "" // Use relative URL in production
+        : (process.env.REACT_APP_API_URL || "http://localhost:4500");
+      
+      // Log the API URL being used
+      console.log("Auth API URL:", { 
+        url: `${API_URL}/api/users/register`, 
+        isProduction, 
+        hostname: window.location.hostname
+      });
+      
       const response = await axios.post(
         `${API_URL}/api/users/register`,
         userData
@@ -290,7 +316,12 @@ export const AuthProvider = ({ children }) => {
     try {
       // Call logout endpoint if needed
       if (user) {
-        const API_URL = process.env.REACT_APP_API_URL || "http://localhost:4500";
+        // In production, use relative URLs for API calls to avoid CORS issues
+        const isProduction = window.location.hostname !== "localhost";
+        const API_URL = isProduction 
+          ? "" // Use relative URL in production
+          : (process.env.REACT_APP_API_URL || "http://localhost:4500");
+          
         await axios.post(`${API_URL}/api/users/logout`);
         
         // Log successful logout

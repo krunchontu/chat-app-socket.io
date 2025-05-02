@@ -9,12 +9,33 @@ import { createLogger } from "../utils/logger";
 
 // Determine if we're in production based on hostname
 const isProduction = window.location.hostname !== "localhost";
-// In production, use the same origin for socket connection with /socket.io path
-const productionEndpoint = `${window.location.protocol}//${window.location.hostname}/socket.io`;
-// Use environment variable if available, otherwise use localhost in development, or same origin in production
+// For production, we can either:
+// 1. Use the same origin - this works when backend and frontend are on the same domain
+// 2. Connect to the specific backend URL if they're on different domains
+const backendHost = isProduction
+  ? process.env.REACT_APP_BACKEND_HOST || window.location.hostname
+  : "localhost";
+const backendPort = isProduction
+  ? backendHost === window.location.hostname
+    ? window.location.port
+    : "4500"
+  : "4500";
+const backendProtocol = isProduction ? window.location.protocol : "http:";
+
+// Construct the endpoint with protocol, host, port
+// If it's the same host as the frontend, use a relative path
+const isSameOrigin =
+  backendHost === window.location.hostname &&
+  backendPort === window.location.port;
+const productionEndpoint = isSameOrigin
+  ? "" // Just use relative path for same origin
+  : `${backendProtocol}//${backendHost}${backendPort ? ":" + backendPort : ""}`;
+
+// Final socket endpoint, prioritizing environment variable if available
 const ENDPOINT =
   process.env.REACT_APP_SOCKET_URL ||
   (isProduction ? productionEndpoint : "http://localhost:4500/");
+
 const logger = createLogger("useSocketConnection");
 
 // Log the selected endpoint for debugging
@@ -22,6 +43,10 @@ logger.info("Socket endpoint configuration:", {
   endpoint: ENDPOINT,
   isProduction,
   hostname: window.location.hostname,
+  backendHost,
+  backendPort,
+  backendProtocol,
+  isSameOrigin,
   env: process.env.NODE_ENV,
   socketUrl: process.env.REACT_APP_SOCKET_URL,
 });
@@ -103,14 +128,23 @@ const useSocketConnection = () => {
       transports: ["websocket", "polling"],
       auth: { token },
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 10, // Increased from 5
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      timeout: 20000,
-      // forceNew: true, // Consider if needed, can cause issues if component re-renders often
+      timeout: 30000, // Increased from 20000
+      path: "/socket.io", // Explicitly set the socket.io path
+      forceNew: false, // Avoid creating multiple connections
+      query: {
+        client_type: "web", // Helps identify client type in logs
+        version: process.env.REACT_APP_VERSION || "1.0.0",
+      },
     };
 
     try {
+      logger.info("Creating socket connection to:", {
+        endpoint: ENDPOINT,
+        options: JSON.stringify(socketOptions),
+      });
       const newSocket = socketIo(ENDPOINT, socketOptions);
       socketRef.current = newSocket; // Store in ref immediately
       setSocket(newSocket); // Update state
