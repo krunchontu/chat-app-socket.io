@@ -9,46 +9,58 @@ import { createLogger } from "../utils/logger";
 
 // Determine if we're in production using NODE_ENV for consistency
 const isProduction = process.env.NODE_ENV === "production";
-// For production, we can either:
-// 1. Use the same origin - this works when backend and frontend are on the same domain
-// 2. Connect to the specific backend URL if they're on different domains
-const backendHost = isProduction
-  ? process.env.REACT_APP_BACKEND_HOST || window.location.hostname
-  : "localhost";
-const backendPort = isProduction
-  ? backendHost === window.location.hostname
-    ? window.location.port
-    : "4500"
-  : "4500";
-const backendProtocol = isProduction ? window.location.protocol : "http:";
 
-// Construct the endpoint with protocol, host, port
-// If it's the same host as the frontend, use a relative path
-const isSameOrigin =
-  backendHost === window.location.hostname &&
-  backendPort === window.location.port;
-const productionEndpoint = isSameOrigin
-  ? "" // Just use relative path for same origin
-  : `${backendProtocol}//${backendHost}${backendPort ? ":" + backendPort : ""}`;
+// Get hostname and prepare for backend URL construction
+const hostname = window.location.hostname;
 
-// Final socket endpoint, prioritizing environment variable if available
-const ENDPOINT =
+// Determine the backend host with improved logic
+let backendHost;
+if (hostname.includes("chat-app-frontend")) {
+  // For Render deployments: convert frontend URL to backend URL
+  backendHost = hostname.replace("frontend", "backend");
+} else if (hostname === "localhost" || hostname === "127.0.0.1") {
+  // For local development
+  backendHost = "localhost:4500";
+} else {
+  // For other deployments, assume backend is at same host
+  backendHost = hostname;
+}
+
+// Use environment variable for socket URL across all environments
+// With improved fallback logic for production environments
+const SOCKET_URL =
   process.env.REACT_APP_SOCKET_URL ||
-  (isProduction ? productionEndpoint : "http://localhost:4500/");
+  (isProduction ? `https://${backendHost}` : `http://${backendHost}`);
+
+// Force HTTPS in production for security (unless explicitly set otherwise)
+const secureSocketUrl =
+  isProduction &&
+  !SOCKET_URL.startsWith("https://") &&
+  !SOCKET_URL.startsWith("/")
+    ? SOCKET_URL.replace("http://", "https://")
+    : SOCKET_URL;
+
+// Final socket endpoint with proper WebSocket protocol
+const wsProtocol = secureSocketUrl.startsWith("https://") ? "wss" : "ws";
+const httpUrl = secureSocketUrl.startsWith("/")
+  ? window.location.origin + secureSocketUrl
+  : secureSocketUrl;
+
+// Final socket endpoint
+const ENDPOINT = process.env.REACT_APP_SOCKET_URL || httpUrl;
 
 const logger = createLogger("useSocketConnection");
 
 // Log the selected endpoint for debugging
 logger.info("Socket endpoint configuration:", {
   endpoint: ENDPOINT,
+  secureEndpoint: secureSocketUrl,
   isProduction,
   hostname: window.location.hostname,
   backendHost,
-  backendPort,
-  backendProtocol,
-  isSameOrigin,
   env: process.env.NODE_ENV,
   socketUrl: process.env.REACT_APP_SOCKET_URL,
+  protocol: window.location.protocol,
 });
 
 /**

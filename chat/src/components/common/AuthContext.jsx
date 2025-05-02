@@ -229,14 +229,31 @@ export const AuthProvider = ({ children }) => {
       
       // Get hostname and prepare for backend URL construction
       const hostname = window.location.hostname;
-      const backendHost = hostname.includes('chat-app-frontend') 
-        ? hostname.replace('frontend', 'backend') 
-        : hostname;
-        
+      
+      // Determine the backend host with improved logic
+      let backendHost;
+      if (hostname.includes('chat-app-frontend')) {
+        // For Render deployments: convert frontend URL to backend URL
+        backendHost = hostname.replace('frontend', 'backend');
+      } else if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        // For local development
+        backendHost = 'localhost:4500';
+      } else {
+        // For other deployments, assume backend is at same host
+        backendHost = hostname;
+      }
+      
       // Use environment variable for API URL across all environments
-      // With fallback logic for production environments
+      // With improved fallback logic for production environments
       const API_URL = process.env.REACT_APP_API_URL || 
-        (isProduction ? `https://${backendHost}` : "http://localhost:4500");
+        (isProduction 
+          ? `https://${backendHost}` 
+          : `http://${backendHost}`);
+
+      // Force HTTPS in production for security (unless explicitly set otherwise)
+      const secureApiUrl = isProduction && !API_URL.startsWith('https://') && !API_URL.startsWith('/') 
+        ? API_URL.replace('http://', 'https://') 
+        : API_URL;
       
       // Log detailed API configuration for debugging
       console.group("Login API Request Configuration");
@@ -255,7 +272,7 @@ export const AuthProvider = ({ children }) => {
       console.groupEnd();
       
       const response = await axios.post(
-        `${API_URL}/api/users/login`,
+        `${secureApiUrl}/api/users/login`,
         { username, password }
       );
       
@@ -375,14 +392,31 @@ export const AuthProvider = ({ children }) => {
       
       // Get hostname and prepare for backend URL construction
       const hostname = window.location.hostname;
-      const backendHost = hostname.includes('chat-app-frontend') 
-        ? hostname.replace('frontend', 'backend') 
-        : hostname;
-        
+      
+      // Determine the backend host with improved logic
+      let backendHost;
+      if (hostname.includes('chat-app-frontend')) {
+        // For Render deployments: convert frontend URL to backend URL
+        backendHost = hostname.replace('frontend', 'backend');
+      } else if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        // For local development
+        backendHost = 'localhost:4500';
+      } else {
+        // For other deployments, assume backend is at same host
+        backendHost = hostname;
+      }
+      
       // Use environment variable for API URL across all environments
-      // With fallback logic for production environments
+      // With improved fallback logic for production environments
       const API_URL = process.env.REACT_APP_API_URL || 
-        (isProduction ? `https://${backendHost}` : "http://localhost:4500");
+        (isProduction 
+          ? `https://${backendHost}` 
+          : `http://${backendHost}`);
+
+      // Force HTTPS in production for security (unless explicitly set otherwise)
+      const secureApiUrl = isProduction && !API_URL.startsWith('https://') && !API_URL.startsWith('/') 
+        ? API_URL.replace('http://', 'https://') 
+        : API_URL;
       
       // Log detailed API configuration for debugging
       console.group("Registration API Request Configuration");
@@ -401,7 +435,7 @@ export const AuthProvider = ({ children }) => {
       console.groupEnd();
       
       const response = await axios.post(
-        `${API_URL}/api/users/register`,
+        `${secureApiUrl}/api/users/register`,
         userData
       );
       
@@ -495,14 +529,31 @@ export const AuthProvider = ({ children }) => {
         
         // Get hostname and prepare for backend URL construction
         const hostname = window.location.hostname;
-        const backendHost = hostname.includes('chat-app-frontend') 
-          ? hostname.replace('frontend', 'backend') 
-          : hostname;
-          
+        
+        // Determine the backend host with improved logic
+        let backendHost;
+        if (hostname.includes('chat-app-frontend')) {
+          // For Render deployments: convert frontend URL to backend URL
+          backendHost = hostname.replace('frontend', 'backend');
+        } else if (hostname === 'localhost' || hostname === '127.0.0.1') {
+          // For local development
+          backendHost = 'localhost:4500';
+        } else {
+          // For other deployments, assume backend is at same host
+          backendHost = hostname;
+        }
+        
         // Use environment variable for API URL across all environments
-        // With fallback logic for production environments
+        // With improved fallback logic for production environments
         const API_URL = process.env.REACT_APP_API_URL || 
-          (isProduction ? `https://${backendHost}` : "http://localhost:4500");
+          (isProduction 
+            ? `https://${backendHost}` 
+            : `http://${backendHost}`);
+
+        // Force HTTPS in production for security (unless explicitly set otherwise)
+        const secureApiUrl = isProduction && !API_URL.startsWith('https://') && !API_URL.startsWith('/') 
+          ? API_URL.replace('http://', 'https://') 
+          : API_URL;
         
         // Log detailed API configuration for debugging
         console.group("Logout API Request Configuration");
@@ -520,7 +571,7 @@ export const AuthProvider = ({ children }) => {
         });
         console.groupEnd();
           
-        await axios.post(`${API_URL}/api/users/logout`);
+        await axios.post(`${secureApiUrl}/api/users/logout`);
         
         // Log successful logout
         ErrorService.logError(

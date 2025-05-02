@@ -60,6 +60,16 @@ const corsOptions = {
           "chat-app-frontend-hgqg.onrender.com",
         ];
 
+    // Always add the current origin to allowed origins if it's not already in the list
+    if (
+      origin &&
+      !allowedOrigins.includes(origin) &&
+      !allowedOrigins.includes("*")
+    ) {
+      console.log(`Adding current origin to allowed origins: ${origin}`);
+      allowedOrigins.push(origin);
+    }
+
     // Allow requests with no origin (like mobile apps, curl, etc)
     if (!origin) return callback(null, true);
 
@@ -74,7 +84,20 @@ const corsOptions = {
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true, // Allow cookies for authentication if needed
   optionsSuccessStatus: 204,
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+    "Origin",
+    "X-CSRF-Token",
+  ],
+  exposedHeaders: ["Content-Range", "X-Content-Range"],
+  maxAge: 86400, // Cache preflight request results for 24 hours (in seconds)
 };
+
+// Pre-flight OPTIONS requests handling for CORS
+app.options("*", cors(corsOptions));
 
 // Apply CORS middleware with options
 app.use(cors(corsOptions));
@@ -108,35 +131,18 @@ const server = http.createServer(app);
 // Initialize Socket.IO Server with CORS configuration matching Express settings
 const io = new Server(server, {
   cors: {
-    origin: function (origin, callback) {
-      // Get allowed origins from environment or default to localhost and render URL
-      const allowedOrigins = process.env.CLIENT_ORIGIN
-        ? process.env.CLIENT_ORIGIN.split(",")
-        : [
-            "http://localhost:3000",
-            "https://chat-app-frontend-hgqg.onrender.com",
-            // Include both with and without protocol for better compatibility
-            "chat-app-frontend-hgqg.onrender.com",
-          ];
-
-      // Allow requests with no origin
-      if (!origin) return callback(null, true);
-
-      if (
-        allowedOrigins.indexOf(origin) !== -1 ||
-        allowedOrigins.includes("*")
-      ) {
-        callback(null, true);
-      } else {
-        console.log(`Socket.IO CORS blocked request from origin: ${origin}`);
-        callback(new Error(`Origin ${origin} not allowed by CORS`));
-      }
-    },
+    origin: corsOptions.origin,
     methods: corsOptions.methods,
     credentials: corsOptions.credentials,
+    allowedHeaders: corsOptions.allowedHeaders,
+    exposedHeaders: corsOptions.exposedHeaders,
+    maxAge: corsOptions.maxAge,
   },
   path: "/socket.io/",
   transports: ["websocket", "polling"],
+  pingTimeout: 60000, // Increase ping timeout for better connection stability
+  pingInterval: 25000, // Ping interval for keeping connections alive
+  connectTimeout: 30000, // Connection timeout
 });
 
 // Log the configured port
