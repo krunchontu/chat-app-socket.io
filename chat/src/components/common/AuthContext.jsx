@@ -4,6 +4,47 @@ import ErrorService, { ErrorCategory } from "../../services/ErrorService";
 import { setupCSRFProtection, clearCSRFToken } from "../../utils/csrfUtils";
 import { createLogger } from "../../utils/logger";
 
+/**
+ * Logs all environment variables for debugging purposes
+ * @returns {Object} Object containing all environment variables
+ */
+const logEnvironmentVariables = () => {
+  const envVars = {};
+  
+  // Get all environment variables with REACT_APP prefix
+  Object.keys(process.env).forEach(key => {
+    if (key.startsWith('REACT_APP_')) {
+      envVars[key] = process.env[key];
+    }
+  });
+  
+  // Add other important environment variables
+  envVars.NODE_ENV = process.env.NODE_ENV;
+  envVars.PUBLIC_URL = process.env.PUBLIC_URL;
+  
+  // Add browser information
+  envVars.userAgent = navigator.userAgent;
+  envVars.hostname = window.location.hostname;
+  envVars.protocol = window.location.protocol;
+  envVars.origin = window.location.origin;
+  
+  // Log the collected environment information
+  console.group('Environment Variables');
+  console.log('All environment variables:', envVars);
+  console.log('API URL:', process.env.REACT_APP_API_URL || 'Not set');
+  console.log('Socket URL:', process.env.REACT_APP_SOCKET_URL || 'Not set');
+  console.log('Environment:', process.env.NODE_ENV);
+  console.log('Browser Information:', {
+    userAgent: navigator.userAgent,
+    language: navigator.language,
+    cookieEnabled: navigator.cookieEnabled,
+    online: navigator.onLine
+  });
+  console.groupEnd();
+  
+  return envVars;
+};
+
 const AuthContext = createContext();
 
 /**
@@ -92,6 +133,17 @@ export const AuthProvider = ({ children }) => {
     return true;
   }, [logger]);
   
+  // Log environment variables on component mount
+  useEffect(() => {
+    // Log environment variables on initialization, especially in production
+    if (process.env.NODE_ENV === "production") {
+      console.log("AuthContext initialized in production environment");
+      logEnvironmentVariables();
+    } else {
+      console.log("AuthContext initialized in development environment");
+    }
+  }, []);
+  
   // Initialize auth state from localStorage on app load
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -175,17 +227,32 @@ export const AuthProvider = ({ children }) => {
       // Check if we're in production environment
       const isProduction = process.env.NODE_ENV === "production";
       
+      // Get hostname and prepare for backend URL construction
+      const hostname = window.location.hostname;
+      const backendHost = hostname.includes('chat-app-frontend') 
+        ? hostname.replace('frontend', 'backend') 
+        : hostname;
+        
       // Use environment variable for API URL across all environments
+      // With fallback logic for production environments
       const API_URL = process.env.REACT_APP_API_URL || 
-        (isProduction ? "" : "http://localhost:4500");
+        (isProduction ? `https://${backendHost}` : "http://localhost:4500");
       
-      // Log the API URL being used
-      console.log("Auth API URL:", { 
-        url: `${API_URL}/api/users/login`, 
+      // Log detailed API configuration for debugging
+      console.group("Login API Request Configuration");
+      console.log("All Environment Variables:", logEnvironmentVariables());
+      console.log("API URL Configuration:", { 
+        raw_env_api_url: process.env.REACT_APP_API_URL,
+        computed_api_url: API_URL,
+        endpoint: `${API_URL}/api/users/login`,
         isProduction, 
         hostname: window.location.hostname,
-        env: process.env.NODE_ENV
+        backendHost,
+        env: process.env.NODE_ENV,
+        protocol: window.location.protocol,
+        full_url: `${API_URL}/api/users/login`
       });
+      console.groupEnd();
       
       const response = await axios.post(
         `${API_URL}/api/users/login`,
@@ -233,6 +300,51 @@ export const AuthProvider = ({ children }) => {
       
       return { success: true };
     } catch (error) {
+      // Enhanced error logging for login failures
+      console.group("Login Error Details");
+      console.error("Login failed:", error.message);
+      
+      if (error.response) {
+        console.error("Server Response:", {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data,
+          headers: Object.fromEntries(
+            Object.entries(error.response.headers).map(([k, v]) => [k, v])
+          )
+        });
+        
+        // Special handling for 405 Method Not Allowed errors
+        if (error.response.status === 405) {
+          console.error("405 Method Not Allowed Error Detected!", {
+            requestUrl: error.config?.url,
+            requestMethod: error.config?.method,
+            allowed: error.response.headers['allow'] || 'Not specified'
+          });
+          
+          // Log the request configuration that led to the 405 error
+          console.error("Request Configuration:", {
+            baseURL: error.config?.baseURL,
+            url: error.config?.url,
+            method: error.config?.method,
+            headers: error.config?.headers,
+            timeout: error.config?.timeout
+          });
+        }
+      }
+      
+      // Log request configuration regardless of error type
+      console.error("Request Details:", {
+        url: error.config?.url,
+        method: error.config?.method,
+        baseURL: error.config?.baseURL,
+        headers: error.config?.headers,
+        timeout: error.config?.timeout,
+        withCredentials: error.config?.withCredentials
+      });
+      
+      console.groupEnd();
+      
       // Use error service to handle authentication errors
       const errorMessage = ErrorService.handleApiError(error, "auth-login");
       
@@ -261,17 +373,32 @@ export const AuthProvider = ({ children }) => {
       // Check if we're in production environment
       const isProduction = process.env.NODE_ENV === "production";
       
+      // Get hostname and prepare for backend URL construction
+      const hostname = window.location.hostname;
+      const backendHost = hostname.includes('chat-app-frontend') 
+        ? hostname.replace('frontend', 'backend') 
+        : hostname;
+        
       // Use environment variable for API URL across all environments
+      // With fallback logic for production environments
       const API_URL = process.env.REACT_APP_API_URL || 
-        (isProduction ? "" : "http://localhost:4500");
+        (isProduction ? `https://${backendHost}` : "http://localhost:4500");
       
-      // Log the API URL being used
-      console.log("Auth API URL:", { 
-        url: `${API_URL}/api/users/register`, 
+      // Log detailed API configuration for debugging
+      console.group("Registration API Request Configuration");
+      console.log("All Environment Variables:", logEnvironmentVariables());
+      console.log("API URL Configuration:", { 
+        raw_env_api_url: process.env.REACT_APP_API_URL,
+        computed_api_url: API_URL,
+        endpoint: `${API_URL}/api/users/register`,
         isProduction, 
         hostname: window.location.hostname,
-        env: process.env.NODE_ENV
+        backendHost,
+        env: process.env.NODE_ENV,
+        protocol: window.location.protocol,
+        full_url: `${API_URL}/api/users/register`
       });
+      console.groupEnd();
       
       const response = await axios.post(
         `${API_URL}/api/users/register`,
@@ -299,6 +426,51 @@ export const AuthProvider = ({ children }) => {
       
       return { success: true };
     } catch (error) {
+      // Enhanced error logging for registration failures, particularly 405 errors
+      console.group("Registration Error Details");
+      console.error("Registration failed:", error.message);
+      
+      if (error.response) {
+        console.error("Server Response:", {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data,
+          headers: Object.fromEntries(
+            Object.entries(error.response.headers).map(([k, v]) => [k, v])
+          )
+        });
+        
+        // Special handling for 405 Method Not Allowed errors
+        if (error.response.status === 405) {
+          console.error("405 Method Not Allowed Error Detected!", {
+            requestUrl: error.config?.url,
+            requestMethod: error.config?.method,
+            allowed: error.response.headers['allow'] || 'Not specified'
+          });
+          
+          // Log the request configuration that led to the 405 error
+          console.error("Request Configuration:", {
+            baseURL: error.config?.baseURL,
+            url: error.config?.url,
+            method: error.config?.method,
+            headers: error.config?.headers,
+            timeout: error.config?.timeout
+          });
+        }
+      }
+      
+      // Log request configuration regardless of error type
+      console.error("Request Details:", {
+        url: error.config?.url,
+        method: error.config?.method,
+        baseURL: error.config?.baseURL,
+        headers: error.config?.headers,
+        timeout: error.config?.timeout,
+        withCredentials: error.config?.withCredentials
+      });
+      
+      console.groupEnd();
+      
       // Use error service to handle registration errors
       const errorMessage = ErrorService.handleApiError(error, "auth-register");
       
@@ -321,9 +493,32 @@ export const AuthProvider = ({ children }) => {
         // Check if we're in production environment
         const isProduction = process.env.NODE_ENV === "production";
         
+        // Get hostname and prepare for backend URL construction
+        const hostname = window.location.hostname;
+        const backendHost = hostname.includes('chat-app-frontend') 
+          ? hostname.replace('frontend', 'backend') 
+          : hostname;
+          
         // Use environment variable for API URL across all environments
+        // With fallback logic for production environments
         const API_URL = process.env.REACT_APP_API_URL || 
-          (isProduction ? "" : "http://localhost:4500");
+          (isProduction ? `https://${backendHost}` : "http://localhost:4500");
+        
+        // Log detailed API configuration for debugging
+        console.group("Logout API Request Configuration");
+        console.log("All Environment Variables:", logEnvironmentVariables());
+        console.log("API URL Configuration:", { 
+          raw_env_api_url: process.env.REACT_APP_API_URL,
+          computed_api_url: API_URL,
+          endpoint: `${API_URL}/api/users/logout`,
+          isProduction, 
+          hostname: window.location.hostname,
+          backendHost,
+          env: process.env.NODE_ENV,
+          protocol: window.location.protocol,
+          full_url: `${API_URL}/api/users/logout`
+        });
+        console.groupEnd();
           
         await axios.post(`${API_URL}/api/users/logout`);
         
@@ -348,6 +543,42 @@ export const AuthProvider = ({ children }) => {
       
       return { success: true };
     } catch (error) {
+      // Enhanced error logging for logout failures
+      console.group("Logout Error Details");
+      console.error("Logout failed:", error.message);
+      
+      if (error.response) {
+        console.error("Server Response:", {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data,
+          headers: Object.fromEntries(
+            Object.entries(error.response.headers).map(([k, v]) => [k, v])
+          )
+        });
+        
+        // Special handling for 405 Method Not Allowed errors
+        if (error.response.status === 405) {
+          console.error("405 Method Not Allowed Error Detected!", {
+            requestUrl: error.config?.url,
+            requestMethod: error.config?.method,
+            allowed: error.response.headers['allow'] || 'Not specified'
+          });
+        }
+      }
+      
+      // Log request configuration regardless of error type
+      console.error("Request Details:", {
+        url: error.config?.url,
+        method: error.config?.method,
+        baseURL: error.config?.baseURL,
+        headers: error.config?.headers,
+        timeout: error.config?.timeout,
+        withCredentials: error.config?.withCredentials
+      });
+      
+      console.groupEnd();
+      
       // Log the error but continue with logout
       ErrorService.handleApiError(error, "auth-logout");
       
