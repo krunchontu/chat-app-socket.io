@@ -87,13 +87,16 @@ const setupMockModels = () => {
 const connectDB = async () => {
   try {
     // Verify MongoDB URI is set
-    if (!process.env.MONGODB_URI) {
-      logger.error("MONGODB_URI environment variable is not set");
+    if (!process.env.MONGO_URI && !process.env.MONGODB_URI) {
+      logger.error("MONGO_URI environment variable is not set");
       throw new Error("Database connection string is missing");
     }
 
+    // Use MONGO_URI (preferred) or fall back to MONGODB_URI
+    const connectionString = process.env.MONGO_URI || process.env.MONGODB_URI;
+
     // Add connection options for better reliability
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
+    const conn = await mongoose.connect(connectionString, {
       serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
       socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
       retryWrites: true,

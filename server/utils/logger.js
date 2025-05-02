@@ -1,10 +1,12 @@
 /**
  * Enhanced structured logging utility for the server side
  * Provides consistent, structured logging with correlation IDs and context
+ * Integrates with LogDNA in production for centralized logging
  */
 
 const chalk = require("chalk");
 const { v4: uuidv4 } = require("uuid");
+const logdnaLogger = require("./logdna");
 
 // Constants
 const LogLevel = {
@@ -129,6 +131,40 @@ const createLogger = (context) => {
         console.log(chalk.red(data.stack || data.message));
       } else {
         console.log(data);
+      }
+    }
+
+    // Send to LogDNA in production
+    if (!isDevelopment) {
+      const logData = {
+        context,
+        ...metadata,
+      };
+
+      if (Object.keys(data).length > 0) {
+        if (data instanceof Error) {
+          logData.error = {
+            message: data.message,
+            stack: data.stack,
+          };
+        } else {
+          logData.data = data;
+        }
+      }
+
+      switch (level) {
+        case LogLevel.DEBUG:
+          logdnaLogger.debug(message, logData);
+          break;
+        case LogLevel.INFO:
+          logdnaLogger.info(message, logData);
+          break;
+        case LogLevel.WARN:
+          logdnaLogger.warn(message, logData);
+          break;
+        case LogLevel.ERROR:
+          logdnaLogger.error(message, logData);
+          break;
       }
     }
 

@@ -57,7 +57,8 @@ const isTokenExpiring = (decoded, thresholdMinutes = 5) => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tokenValid, setTokenValid] = useState(true);
+  // State used internally to track token validity
+  const [, setTokenValid] = useState(true);
   const logger = createLogger("AuthContext");
   
   /**
@@ -89,7 +90,7 @@ export const AuthProvider = ({ children }) => {
     
     setTokenValid(true);
     return true;
-  }, []);
+  }, [logger]);
   
   // Initialize auth state from localStorage on app load
   useEffect(() => {

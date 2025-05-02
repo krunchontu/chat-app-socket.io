@@ -72,8 +72,17 @@ const messagesReducer = (state, action) => {
           newPagination.currentPage < newPagination.totalPages - 1,
       };
     case "ADD_MESSAGE":
+      // Log the action payload for debugging
+      console.group("📩 MESSAGE_STATE: Adding Message");
+      console.log("Action payload:", action.payload);
+      console.log("Is server response:", !!action.payload.isServerResponse);
+      console.log("Has tempId:", !!action.payload.tempId);
+      console.log("Current messages count:", state.messages.length);
+      console.groupEnd();
+
       // If it's a server response matching an optimistic message, replace it
       if (action.payload.isServerResponse && action.payload.tempId) {
+        console.log("Replacing optimistic message with server response");
         return {
           ...state,
           messages: replaceOptimisticMessage(
@@ -85,19 +94,24 @@ const messagesReducer = (state, action) => {
       }
 
       // Deduplication for regular messages or new optimistic messages
+      const messageId = action.payload.id || action.payload._id; // Handle different ID formats
+      const tempId = action.payload.tempId;
+
       const isDuplicate = state.messages.some(
         (msg) =>
-          msg.id === action.payload.id ||
-          (action.payload.tempId && msg.id === action.payload.tempId)
+          (messageId && (msg.id === messageId || msg._id === messageId)) ||
+          (tempId && (msg.id === tempId || msg.tempId === tempId))
       );
 
       if (isDuplicate) {
         logger.warn("Prevented duplicate message add", {
-          id: action.payload.id || action.payload.tempId,
+          id: messageId || tempId,
         });
+        console.log("DUPLICATE MESSAGE PREVENTED:", action.payload);
         return state; // Don't add duplicates
       }
 
+      console.log("Adding new message to state:", action.payload);
       return { ...state, messages: [...state.messages, action.payload] };
     case "UPDATE_MESSAGE": // Handles likes and reactions
       return {

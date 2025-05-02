@@ -8,7 +8,7 @@ import ErrorService, {
 import { createLogger } from "../utils/logger";
 
 const ENDPOINT =
-  process.env.REACT_APP_SOCKET_ENDPOINT || "http://localhost:4501/";
+  process.env.REACT_APP_SOCKET_ENDPOINT || "http://localhost:4500/";
 const logger = createLogger("useSocketConnection");
 
 /**
@@ -233,7 +233,7 @@ const useSocketConnection = () => {
         setIsConnected(false);
       }
     };
-  }, [isAuthenticated, user, handleAuthError]); // Rerun when auth state changes
+  }, [isAuthenticated, user, handleAuthError, connectionError]); // Rerun when auth state changes
 
   return { socket, isConnected, connectionError, clearConnectionError };
 };

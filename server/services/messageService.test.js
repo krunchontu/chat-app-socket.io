@@ -49,7 +49,11 @@ describe("MessageService", () => {
     mockMessageData = {
       id: "messageId456",
       _id: "messageId456", // Mongoose might use _id
-      userId: "userId123",
+      userId: {
+        // Mock ObjectId with equals method
+        toString: () => "userId123",
+        equals: jest.fn().mockImplementation((id) => id === "userId123"),
+      },
       user: "testuser",
       text: "Original message",
       timestamp: new Date().toISOString(),

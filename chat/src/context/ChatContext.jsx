@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect } from "react";
+import React, { createContext, useContext, useEffect, useCallback, useRef, useState } from "react";
 import { useAuth } from "../components/common/AuthContext";
 import useSocketConnection from "../hooks/useSocketConnection";
 import useMessageState from "../hooks/useMessageState";
@@ -6,22 +6,70 @@ import useMessageOperations from "../hooks/useMessageOperations";
 import useOnlineStatus from "../hooks/useOnlineStatus";
 import useChatNotifications from "../hooks/useChatNotifications";
 import useChatUiState from "../hooks/useChatUiState";
+import useSocketEvents from "../hooks/useSocketEvents";
 import { processQueue } from "../utils/offlineQueue";
 import { createLogger } from "../utils/logger";
-import ErrorService from "../services/ErrorService"; // Keep for potential top-level error display
+import ErrorService from "../services/ErrorService";
+import { v4 as uuidv4 } from "uuid";
 
 const logger = createLogger("ChatProvider");
 const ChatContext = createContext();
 
+// For tracing all events during debugging
+const DEBUG_MESSAGE_TRACE_ENABLED = true;
+
 export const ChatProvider = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const isOnline = useOnlineStatus();
+  
+  // Track message processing for debugging
+  const [debugState, setDebugState] = useState({
+    lastEventTime: null,
+    processedMessageIds: new Set(),
+    missedMessages: []
+  });
+  
+  // Use ref to remember original socket ID and track reconnections
+  const socketInfoRef = useRef({
+    originalId: null,
+    reconnections: 0,
+    lastReconnectTime: null,
+    eventCounts: {
+      message: 0,
+      sendMessage: 0
+    }
+  });
 
   // --- Core Hooks ---
   const { socket, isConnected, connectionError, clearConnectionError } = useSocketConnection();
   const { messageState, dispatchMessages, fetchInitialMessages, loadMoreMessages, clearMessageError } = useMessageState();
   const { notificationState, dispatchNotifications, addSystemNotification } = useChatNotifications();
   const { uiState, dispatchUi, setReplyingTo, clearReplyingTo } = useChatUiState();
+  
+  // Initialize the socketEvents hook for more robust event handling
+  const { registerEvent, emitEvent } = useSocketEvents(socket, dispatchMessages, user);
+  
+  // Auto-update debug socket info
+  useEffect(() => {
+    if (socket && socket.id) {
+      // If this is the first connection, store the original ID
+      if (!socketInfoRef.current.originalId) {
+        socketInfoRef.current.originalId = socket.id;
+        console.log("⚡ Initial socket connection established:", socket.id);
+      } 
+      // If socket ID changed, track as reconnection
+      else if (socketInfoRef.current.originalId !== socket.id) {
+        socketInfoRef.current.reconnections++;
+        socketInfoRef.current.lastReconnectTime = new Date().toISOString();
+        console.log("⚡ Socket reconnection detected:", {
+          oldId: socketInfoRef.current.originalId,
+          newId: socket.id,
+          reconnectCount: socketInfoRef.current.reconnections
+        });
+        socketInfoRef.current.originalId = socket.id;
+      }
+    }
+  }, [socket]);
 
   // --- Operations Hook (depends on other hooks' state/dispatch) ---
   const {
@@ -37,7 +85,8 @@ export const ChatProvider = ({ children }) => {
     isOnline,
     dispatchMessages,
     dispatchUi,
-    messageState.messages // Pass messages for permission checks
+    messageState.messages, // Pass messages for permission checks
+    emitEvent // Pass the enhanced emit function for better reconnection handling
   );
 
   // --- Effects ---
@@ -51,7 +100,141 @@ export const ChatProvider = ({ children }) => {
     // Clear messages if user logs out? Maybe handled elsewhere.
   }, [isAuthenticated, isConnected, fetchInitialMessages]);
 
-  // Register socket event listeners
+  /**
+   * Enhanced message handler with debugging and deduplication
+   * Processes both 'message' and 'sendMessage' event types
+   */
+  const handleNewMessage = useCallback((data) => {
+    const now = new Date();
+    const messageId = data?.id || data?._id;
+    const tempId = data?.tempId || (data?._meta?.tempId);
+    
+    // Enhanced debug logging
+    if (DEBUG_MESSAGE_TRACE_ENABLED) {
+      console.group("📩 MESSAGE RECEIVED TRACE");
+      console.log("⏰ Time:", now.toLocaleTimeString());
+      console.log("📝 Data:", data);
+      console.log("🔌 Connection Status:", isConnected ? "Connected" : "Disconnected");
+      console.log("🆔 Socket ID:", socket?.id || "Unknown");
+      console.log("👤 Current User:", user?.username || "Unknown");
+      
+      // Check if this is a duplicate message we've already processed
+      const isDuplicate = messageId && debugState.processedMessageIds.has(messageId);
+      console.log("🔄 Is Duplicate:", isDuplicate);
+      
+      // Track message event type counts
+      const eventType = data?._meta?.eventType || "unknown";
+      if (eventType === "message" || eventType === "sendMessage") {
+        socketInfoRef.current.eventCounts[eventType] = 
+          (socketInfoRef.current.eventCounts[eventType] || 0) + 1;
+      }
+      
+      // Show counts of each event type received
+      console.log("📊 Event Counts:", socketInfoRef.current.eventCounts);
+      
+      console.groupEnd();
+    }
+    
+    // Generate an event identifier for tracing
+    const eventId = uuidv4();
+    
+    try {
+      // Process message data - sometimes the payload structure might vary
+      let messageData = data;
+    
+      // Handle duplicate messages - check if we've already processed this message ID
+      if (messageId && debugState.processedMessageIds.has(messageId)) {
+        console.log(`⚠️ Duplicate message detected and skipped: ${messageId}`);
+        return; // Skip processing
+      }
+      
+      // Add to processed IDs set to prevent duplication
+      if (messageId) {
+        setDebugState(prev => {
+          const updatedProcessedIds = new Set(prev.processedMessageIds);
+          updatedProcessedIds.add(messageId);
+          return {
+            ...prev,
+            lastEventTime: now.toISOString(),
+            processedMessageIds: updatedProcessedIds
+          };
+        });
+      }
+      
+      // Handle optimistic UI updates with tempId
+      if (tempId) {
+        logger.debug("Processing message with tempId:", tempId);
+        dispatchMessages({ 
+          type: "ADD_MESSAGE", 
+          payload: { 
+            isServerResponse: true, 
+            tempId: tempId, 
+            message: messageData,
+            _trace: { eventId, receivedAt: now.toISOString() }
+          } 
+        });
+      } else {
+        logger.debug("Processing regular message:", messageId);
+        dispatchMessages({ 
+          type: "ADD_MESSAGE", 
+          payload: {
+            ...messageData,
+            _trace: { eventId, receivedAt: now.toISOString() }
+          }
+        });
+      }
+    } catch (error) {
+      console.error("⚠️ Error processing incoming message:", error);
+      
+      // Track failed messages for debugging
+      setDebugState(prev => ({
+        ...prev,
+        missedMessages: [
+          ...prev.missedMessages,
+          {
+            id: messageId || "unknown",
+            tempId: tempId || "none",
+            error: error.message,
+            data: JSON.stringify(data).substring(0, 200) + "...", // Truncate for safety
+            timestamp: now.toISOString()
+          }
+        ]
+      }));
+    }
+  }, [dispatchMessages, isConnected, socket, user, debugState.processedMessageIds]);
+
+  const handleMessageUpdated = useCallback((data) => {
+    logger.debug("Received 'messageUpdated' event", { id: data?.id });
+    if (data && data.id) dispatchMessages({ type: "UPDATE_MESSAGE", payload: data });
+  }, [dispatchMessages]);
+
+  const handleMessageEdited = useCallback((data) => {
+    logger.debug("Received 'messageEdited' event", { id: data?.id });
+    if (data && data.id) dispatchMessages({ type: "EDIT_MESSAGE", payload: data });
+  }, [dispatchMessages]);
+
+  const handleMessageDeleted = useCallback((data) => {
+    logger.debug("Received 'messageDeleted' event", { id: data?.id });
+    if (data && data.id) dispatchMessages({ type: "DELETE_MESSAGE", payload: data });
+  }, [dispatchMessages]);
+
+  const handleReplyCreated = useCallback((data) => {
+    logger.debug("Received 'replyCreated' event", { id: data?.id, parentId: data?.parentId });
+    // Treat replies like normal messages for adding to the list
+    if (data && data.id) dispatchMessages({ type: "ADD_MESSAGE", payload: data });
+  }, [dispatchMessages]);
+
+  const handleOnlineUsers = useCallback((users) => {
+    logger.debug("Received 'onlineUsers' event");
+    dispatchNotifications({ type: "SET_ONLINE_USERS", payload: users });
+  }, [dispatchNotifications]);
+
+  const handleUserNotification = useCallback((notification) => {
+    logger.debug("Received 'userNotification' event", { type: notification?.type });
+    dispatchNotifications({ type: "ADD_USER_NOTIFICATION", payload: notification });
+  }, [dispatchNotifications]);
+
+  // Register socket event listeners using the robust useSocketEvents hook
   useEffect(() => {
     if (!socket || !isConnected) {
       logger.debug("Socket not available or not connected, skipping event listener registration.");
@@ -60,64 +243,57 @@ export const ChatProvider = ({ children }) => {
 
     logger.info("Registering core socket event listeners");
 
-    // Message Events -> Dispatch to useMessageState
-    const handleNewMessage = (data) => {
-      logger.debug("Received 'sendMessage' event", { id: data?.id, tempId: data?.tempId });
-      if (data?.tempId) {
-        dispatchMessages({ type: "ADD_MESSAGE", payload: { isServerResponse: true, tempId: data.tempId, message: data } });
-      } else {
-        dispatchMessages({ type: "ADD_MESSAGE", payload: data });
-      }
-    };
-    const handleMessageUpdated = (data) => {
-       logger.debug("Received 'messageUpdated' event", { id: data?.id });
-       if (data && data.id) dispatchMessages({ type: "UPDATE_MESSAGE", payload: data });
-    };
-    const handleMessageEdited = (data) => {
-        logger.debug("Received 'messageEdited' event", { id: data?.id });
-        if (data && data.id) dispatchMessages({ type: "EDIT_MESSAGE", payload: data });
-    };
-    const handleMessageDeleted = (data) => {
-        logger.debug("Received 'messageDeleted' event", { id: data?.id });
-        if (data && data.id) dispatchMessages({ type: "DELETE_MESSAGE", payload: data });
-    };
-    const handleReplyCreated = (data) => {
-        logger.debug("Received 'replyCreated' event", { id: data?.id, parentId: data?.parentId });
-        // Treat replies like normal messages for adding to the list
-        if (data && data.id) dispatchMessages({ type: "ADD_MESSAGE", payload: data });
-    };
+    // Use the improved registerEvent function from useSocketEvents hook
+    // This ensures proper cleanup and re-registration during reconnections
+    const cleanupHandlers = [
+      // Register for both sendMessage and message events
+      // Server might be using different events for broadcasts vs direct messages
+      registerEvent("sendMessage", handleNewMessage),
+      registerEvent("message", handleNewMessage), // Also listen for regular "message" events
+      
+      registerEvent("messageUpdated", handleMessageUpdated),
+      registerEvent("messageEdited", handleMessageEdited),
+      registerEvent("messageDeleted", handleMessageDeleted),
+      registerEvent("replyCreated", handleReplyCreated),
+      registerEvent("onlineUsers", handleOnlineUsers),
+      registerEvent("userNotification", handleUserNotification),
+      
+      // Add reconnection handler to sync up missed messages
+      registerEvent("connect", () => {
+        logger.info("Socket reconnected - catching up on missed messages");
+        // Fetch latest messages to ensure we didn't miss any during reconnect
+        fetchInitialMessages();
+      }),
+      
+      // Handle disconnect event
+      registerEvent("disconnect", (reason) => {
+        logger.warn(`Socket disconnected: ${reason}`);
+        
+        // If not a clean disconnect (client initiated), show notification
+        if (reason !== "io client disconnect") {
+          addSystemNotification(`Connection lost (${reason}). Reconnecting...`);
+        }
+      })
+    ];
 
-    // Notification/User Events -> Dispatch to useChatNotifications
-    const handleOnlineUsers = (users) => {
-        logger.debug("Received 'onlineUsers' event");
-        dispatchNotifications({ type: "SET_ONLINE_USERS", payload: users });
-    };
-    const handleUserNotification = (notification) => {
-        logger.debug("Received 'userNotification' event", { type: notification?.type });
-        dispatchNotifications({ type: "ADD_USER_NOTIFICATION", payload: notification });
-    };
-
-    // Register listeners
-    socket.on("sendMessage", handleNewMessage);
-    socket.on("messageUpdated", handleMessageUpdated); // For likes/reactions
-    socket.on("messageEdited", handleMessageEdited);
-    socket.on("messageDeleted", handleMessageDeleted);
-    socket.on("replyCreated", handleReplyCreated);
-    socket.on("onlineUsers", handleOnlineUsers);
-    socket.on("userNotification", handleUserNotification);
-
-    // Cleanup listeners on disconnect or unmount
+    // Return cleanup function
     return () => {
       logger.info("Cleaning up core socket event listeners");
-      socket.off("sendMessage", handleNewMessage);
-      socket.off("messageUpdated", handleMessageUpdated);
-      socket.off("messageEdited", handleMessageEdited);
-      socket.off("messageDeleted", handleMessageDeleted);
-      socket.off("replyCreated", handleReplyCreated);
-      socket.off("onlineUsers", handleOnlineUsers);
-      socket.off("userNotification", handleUserNotification);
+      cleanupHandlers.forEach(cleanup => cleanup());
     };
-  }, [socket, isConnected, dispatchMessages, dispatchNotifications]); // Rerun if socket instance changes or connection status changes
+  }, [
+    socket, 
+    isConnected, 
+    registerEvent, 
+    handleNewMessage, 
+    handleMessageUpdated,
+    handleMessageEdited,
+    handleMessageDeleted,
+    handleReplyCreated,
+    handleOnlineUsers,
+    handleUserNotification,
+    fetchInitialMessages
+  ]);
 
   // Handle online/offline status changes (notifications and queue processing)
    useEffect(() => {
@@ -147,6 +323,7 @@ export const ChatProvider = ({ children }) => {
     isConnected,
     connectionError,
     clearConnectionError,
+    emitEvent, // Add emitEvent for more reliable socket communication
 
     // Message state & loading/pagination
     messages: messageState.messages,
@@ -156,6 +333,7 @@ export const ChatProvider = ({ children }) => {
     hasMoreMessages: messageState.hasMoreMessages,
     messageError: messageState.error,
     loadMoreMessages,
+    fetchInitialMessages, // Add fetchInitialMessages to fix the runtime error
     clearMessageError,
     dispatchMessages, // Expose for direct optimistic updates
 

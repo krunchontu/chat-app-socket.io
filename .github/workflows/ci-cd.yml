@@ -1,0 +1,138 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, master, develop, release]
+  pull_request:
+    branches: [main, master, develop, release]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install backend dependencies
+        run: |
+          cd server
+          npm ci
+      
+      - name: Run backend linting/tests
+        run: |
+          cd server
+          npm test
+      
+      - name: Install frontend dependencies
+        run: |
+          cd chat
+          npm ci
+      
+      - name: Run frontend linting/tests
+        run: |
+          cd chat
+          npm test -- --watchAll=false
+
+  build:
+    name: Build and Push Docker images
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/release')
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata for backend image
+        id: meta-backend
+        uses: docker/metadata-action@v4
+        with:
+          images: ghcr.io/${{ github.repository }}/chat-backend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,format=short
+      
+      - name: Build and push backend image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./server
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Extract metadata for frontend image
+        id: meta-frontend
+        uses: docker/metadata-action@v4
+        with:
+          images: ghcr.io/${{ github.repository }}/chat-frontend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,format=short
+      
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./chat
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Render
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/release'
+    
+    steps:
+      - name: Deploy Backend to Render
+        uses: JorgeLNJunior/render-deploy@v1.4.3
+        with:
+          service_id: ${{ secrets.RENDER_BACKEND_SERVICE_ID }}
+          api_key: ${{ secrets.RENDER_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Deploy Frontend to Render
+        uses: JorgeLNJunior/render-deploy@v1.4.3
+        with:
+          service_id: ${{ secrets.RENDER_FRONTEND_SERVICE_ID }}
+          api_key: ${{ secrets.RENDER_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Check Backend Deployment
+        run: |
+          echo "Checking backend deployment..."
+          curl --retry 5 --retry-delay 5 --retry-all-errors ${{ secrets.BACKEND_URL }}
+          
+      - name: Notify Deployment Status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "Deployment completed successfully! Services are now live."
+          else
+            echo "Deployment failed. Please check the logs for more information."
+          fi
