@@ -16,6 +16,7 @@ const logger = createLogger("useMessageOperations");
  * @param {function} dispatchMessages - Dispatch function for the messages reducer.
  * @param {function} dispatchUi - Dispatch function for the UI state reducer (e.g., for clearing reply state).
  * @param {Array} messages - The current list of messages (needed for permission checks).
+ * @param {function} [emitEvent] - Optional enhanced emit function from useSocketEvents.
  * @returns {{
  *   sendMessage: (text: string) => Promise<boolean>;
  *   editMessage: (messageId: string, newText: string) => Promise<boolean>;
@@ -32,7 +33,8 @@ const useMessageOperations = (
   isOnline,
   dispatchMessages,
   dispatchUi, // Added for clearing reply state
-  messages // Added for permission checks
+  messages, // Added for permission checks
+  emitEvent = null // Enhanced emit function from useSocketEvents
 ) => {
   const { user } = useAuth();
 
@@ -92,10 +94,18 @@ const useMessageOperations = (
       }
 
       try {
-        socket.emit("message", {
-          text,
-          tempId: optimisticMsg.id, // Send temp ID for matching server response
-        });
+        // Use enhanced emit function if available, otherwise fallback to regular socket.emit
+        if (emitEvent) {
+          emitEvent("message", {
+            text,
+            tempId: optimisticMsg.id, // Send temp ID for matching server response
+          });
+        } else {
+          socket.emit("message", {
+            text,
+            tempId: optimisticMsg.id, // Send temp ID for matching server response
+          });
+        }
         logger.info("Message sent via socket", { tempId: optimisticMsg.id });
         return true;
       } catch (error) {
@@ -115,6 +125,7 @@ const useMessageOperations = (
       user,
       dispatchMessages,
       handleOfflineMessage,
+      emitEvent,
     ]
   );
 
@@ -164,7 +175,12 @@ const useMessageOperations = (
       // dispatchMessages({ type: 'EDIT_MESSAGE', payload: { id: messageId, text: newText, isEdited: true } });
 
       try {
-        socket.emit("editMessage", { id: messageId, text: newText });
+        // Use enhanced emit function if available
+        if (emitEvent) {
+          emitEvent("editMessage", { id: messageId, text: newText });
+        } else {
+          socket.emit("editMessage", { id: messageId, text: newText });
+        }
         logger.info("Edit message event sent", { messageId });
         return true;
       } catch (error) {
@@ -177,7 +193,7 @@ const useMessageOperations = (
         return false;
       }
     },
-    [socket, isConnected, user, messages, dispatchMessages] // Added messages dependency
+    [socket, isConnected, user, messages, dispatchMessages, emitEvent] // Added messages dependency
   );
 
   // Delete a message
@@ -212,7 +228,12 @@ const useMessageOperations = (
       dispatchMessages({ type: "DELETE_MESSAGE", payload: { id: messageId } });
 
       try {
-        socket.emit("deleteMessage", { id: messageId });
+        // Use enhanced emit function if available
+        if (emitEvent) {
+          emitEvent("deleteMessage", { id: messageId });
+        } else {
+          socket.emit("deleteMessage", { id: messageId });
+        }
         logger.info("Delete message event sent", { messageId });
         return true;
       } catch (error) {
@@ -230,7 +251,7 @@ const useMessageOperations = (
         return false;
       }
     },
-    [socket, isConnected, user, messages, dispatchMessages] // Added messages dependency
+    [socket, isConnected, user, messages, dispatchMessages, emitEvent] // Added messages and emitEvent dependencies
   );
 
   // Normalize parent ID helper
@@ -291,11 +312,20 @@ const useMessageOperations = (
       }
 
       try {
-        socket.emit("replyToMessage", {
-          parentId: normalizedParentId,
-          text,
-          tempId: optimisticReply.id,
-        });
+        // Use enhanced emit function if available
+        if (emitEvent) {
+          emitEvent("replyToMessage", {
+            parentId: normalizedParentId,
+            text,
+            tempId: optimisticReply.id,
+          });
+        } else {
+          socket.emit("replyToMessage", {
+            parentId: normalizedParentId,
+            text,
+            tempId: optimisticReply.id,
+          });
+        }
         logger.info("Reply event sent", {
           parentId: normalizedParentId,
           tempId: optimisticReply.id,
@@ -346,7 +376,12 @@ const useMessageOperations = (
       // Might be better to wait for server confirmation via 'messageUpdated' event.
 
       try {
-        socket.emit("reaction", { id: messageId, emoji });
+        // Use enhanced emit function if available
+        if (emitEvent) {
+          emitEvent("reaction", { id: messageId, emoji });
+        } else {
+          socket.emit("reaction", { id: messageId, emoji });
+        }
         logger.info("Reaction event sent", { messageId, emoji });
         return true;
       } catch (error) {
@@ -358,7 +393,7 @@ const useMessageOperations = (
         return false;
       }
     },
-    [socket, isConnected, dispatchMessages]
+    [socket, isConnected, dispatchMessages, emitEvent]
   );
 
   return {

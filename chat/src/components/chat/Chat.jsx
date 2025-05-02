@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useChat } from "../../context/ChatContext";
 import { useAuth } from "../common/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import HeaderComponent from "../common/HeaderComponent";
+import ConnectionStatusIndicator from "../common/ConnectionStatusIndicator";
+import SocketDebugPanel from "../common/SocketDebugPanel";
 import MessageList from "./MessageList";
 import ReplyingTo from "./ReplyingTo";
 import ChatInput from "./ChatInput";
@@ -33,11 +35,11 @@ const ChatApp = () => {
     pagination,
     hasMoreMessages,
     replyingTo,
-    loadMoreMessages, 
-    replyToMessage, 
-    setReplyingTo,
-    // We need the dispatchMessages function for optimistic updates
-    dispatchMessages
+    loadMoreMessages,
+    fetchInitialMessages, // Add fetchInitialMessages for sync feature
+    replyToMessage,
+    sendMessage,
+    setReplyingTo
   } = useChat();
   
   const [inputText, setInputText] = useState("");
@@ -63,18 +65,62 @@ const ChatApp = () => {
     pagination,
   });
   
+  // Keep track of the last time messages were synchronized
+  const lastSyncRef = useRef(Date.now());
+  const syncIntervalRef = useRef(null);
+  
+  // Auto sync messages at regular intervals to ensure no messages are missed
+  useEffect(() => {
+    // Clear any existing interval first
+    if (syncIntervalRef.current) {
+      clearInterval(syncIntervalRef.current);
+    }
+    
+    // Only set up sync if connected
+    if (isConnected) {
+      // Set up automatic synchronization every 10 seconds
+      syncIntervalRef.current = setInterval(() => {
+        const now = Date.now();
+        const timeSinceLastSync = now - lastSyncRef.current;
+        
+        // If it's been more than 10 seconds since we last synced messages
+        if (timeSinceLastSync > 10000) {
+          logger.debug("Auto-syncing messages to ensure up-to-date state");
+          fetchInitialMessages().then(() => {
+            lastSyncRef.current = Date.now();
+          });
+        }
+      }, 10000); // Check every 10 seconds
+      
+      // Set the initial last sync time
+      lastSyncRef.current = Date.now();
+      
+      // Log sync setup
+      logger.info("Message auto-sync system initialized");
+    }
+    
+    // Clean up interval on unmount
+    return () => {
+      if (syncIntervalRef.current) {
+        clearInterval(syncIntervalRef.current);
+      }
+    };
+  }, [isConnected, fetchInitialMessages]);
+  
   // Auto-scroll to bottom when new messages arrive (but not when loading older ones)
   useEffect(() => {
     if (!loadingOlder && messageCount > 0) {
       logger.debug("Auto-scrolling to bottom for new messages");
       scrollToBottom("smooth");
+      // Update sync timestamp when messages change
+      lastSyncRef.current = Date.now();
     }
   }, [messageCount, loadingOlder, scrollToBottom]);
 
   /**
    * Handle sending a new message.
    * Performs validation, determines message type, and emits appropriate event.
-   * Now includes optimistic UI updates to show messages immediately.
+   * Uses the robust message sending functionality from ChatContext.
    */
   const handleMessageSend = useCallback(() => {
     const trimmedText = inputText.trim();
@@ -96,36 +142,16 @@ const ChatApp = () => {
       return;
     }
     
-    // Generate a temporary ID for optimistic updates
-    const tempId = `temp-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const timestamp = new Date().toISOString();
-    // Use the user object from the component scope, not from useAuth() which can't be called here
-    
-    // Create optimistic message object
-    const optimisticMessage = {
-      id: tempId,
-      text: trimmedText,
-      user: user.username,
-      timestamp,
-      tempId, // Mark as temporary
-      parentId: replyingTo ? replyingTo.id : null
-    };
-    
     // Check if replying to a message
     if (replyingTo) {
-      // Send reply via context handler
-      replyToMessage(replyingTo.id, trimmedText, optimisticMessage);
-      logger.debug("Sending reply message", { replyToId: replyingTo.id, tempId });
+      // Send reply via context handler - this handles optimistic updates
+      replyToMessage(replyingTo.id, trimmedText);
+      logger.debug("Sending reply message", { replyToId: replyingTo.id });
     } else {
-      // Regular message - add optimistic update to state
-      logger.debug("Sending regular message", { tempId });
-      // Add to messages array for immediate UI update
-      dispatchMessages({ 
-        type: "ADD_MESSAGE", 
-        payload: optimisticMessage 
-      });
-      // Then emit to server
-      socket.emit("message", { text: trimmedText, tempId });
+      // Use the robust sendMessage function from context which handles
+      // optimistic updates and reconnections properly
+      sendMessage(trimmedText);
+      logger.debug("Sending regular message");
     }
     
     // Clear input and UI state
@@ -134,7 +160,7 @@ const ChatApp = () => {
     
     // Scroll to bottom to show the new message
     setTimeout(() => scrollToBottom("auto"), 50);
-  }, [inputText, socket, isConnected, replyingTo, replyToMessage, dispatchMessages, scrollToBottom, user]);
+  }, [inputText, socket, isConnected, replyingTo, replyToMessage, sendMessage, scrollToBottom]);
 
 
   /**
@@ -272,6 +298,12 @@ const ChatApp = () => {
           onCancelReply={() => setReplyingTo(null)}
         />
       </div>
+      
+      {/* Status indicators */}
+      <ConnectionStatusIndicator />
+      
+      {/* Socket debug panel */}
+      <SocketDebugPanel />
     </div>
   );
 };

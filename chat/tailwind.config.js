@@ -74,6 +74,7 @@ module.exports = {
       },
       animation: {
         fadeIn: "fadeIn 0.3s ease-in-out",
+        fadeOut: "fadeOut 3s ease-in-out forwards",
         slideIn: "slideIn 0.3s ease-out",
         pulse: "pulse 0.3s ease-in-out",
         bounce: "bounce 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55)",
@@ -82,6 +83,11 @@ module.exports = {
         fadeIn: {
           "0%": { opacity: "0" },
           "100%": { opacity: "1" },
+        },
+        fadeOut: {
+          "0%": { opacity: "1" },
+          "50%": { opacity: "1" },
+          "100%": { opacity: "0" },
         },
         slideIn: {
           "0%": { transform: "translateY(10px)", opacity: "0" },

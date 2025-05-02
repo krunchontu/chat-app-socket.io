@@ -193,14 +193,67 @@ io.on("connection", (socket) => {
         tempId: newMessageData.tempId, // Return temp ID for optimistic UI update replacement
       };
 
-      // Broadcast the saved message to all clients
-      io.emit("sendMessage", messageResponse);
+      // Enhance the messageResponse with debug metadata
+      const enhancedResponse = {
+        ...messageResponse,
+        _meta: {
+          ...(messageResponse._meta || {}),
+          eventType: "sendMessage", // Mark the event type
+          correlationId,
+          serverTimestamp: new Date().toISOString(),
+          broadcastTime: Date.now(),
+          fromSocketId: socket.id,
+          fromUserId: socket.user.id,
+          fromUsername: socket.user.username,
+        },
+      };
 
-      logger.socket.info("Message broadcast to all clients", {
+      // Log connected clients before broadcast
+      const connectedClientIds = Object.keys(io.sockets.sockets);
+      logger.socket.info(
+        `Broadcasting message to ${connectedClientIds.length} connected clients`,
+        {
+          clientIds: connectedClientIds,
+        }
+      );
+
+      // Broadcast using sendMessage event type
+      io.emit("sendMessage", enhancedResponse);
+
+      // Also create a variant with the "message" event type
+      const messageTypeResponse = {
+        ...enhancedResponse,
+        _meta: {
+          ...enhancedResponse._meta,
+          eventType: "message", // Override event type for the message event
+        },
+      };
+
+      // Also broadcast as plain "message" event for broader client compatibility
+      io.emit("message", messageTypeResponse);
+
+      // Log detailed broadcast information
+      logger.socket.info("Message broadcast complete", {
         messageId: savedMessage._id,
         userId: socket.user.id,
+        username: socket.user.username,
         tempId: newMessageData.tempId,
         correlationId,
+        events: ["sendMessage", "message"],
+        timestamp: new Date().toISOString(),
+        clientCount: connectedClientIds.length,
+      });
+
+      // Debug: Verify each client socket received the message
+      connectedClientIds.forEach((clientId) => {
+        const clientSocket = io.sockets.sockets[clientId];
+        logger.socket.debug(`Verifying message sent to client: ${clientId}`, {
+          clientInfo: {
+            id: clientId,
+            connected: clientSocket?.connected || false,
+            username: connectedUsers[clientId]?.username || "unknown",
+          },
+        });
       });
     } catch (error) {
       logger.socket.error("Error processing message", {
