@@ -7,8 +7,8 @@ import ErrorService, {
 } from "../services/ErrorService";
 import { createLogger } from "../utils/logger";
 
-// Determine if we're in production based on hostname
-const isProduction = window.location.hostname !== "localhost";
+// Determine if we're in production using NODE_ENV for consistency
+const isProduction = process.env.NODE_ENV === "production";
 // For production, we can either:
 // 1. Use the same origin - this works when backend and frontend are on the same domain
 // 2. Connect to the specific backend URL if they're on different domains
