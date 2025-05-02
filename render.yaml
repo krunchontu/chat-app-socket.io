@@ -11,6 +11,9 @@ services:
     plan: free
     healthCheckPath: /
     # Added resource limits to prevent unexpected costs
+    resources:
+      cpu: 0.25
+      memory: 512MB
     # Added a pre-deploy command for database migrations if needed
     # preDeployCommand: npm run db:migrate
     envVars:
@@ -34,7 +37,7 @@ services:
         fromService:
           name: chat-app-frontend
           type: web
-          property: url
+          property: hostport
       # Added socket.io specific config
       - key: SOCKET_TRANSPORTS
         value: "websocket, polling"
@@ -51,17 +54,20 @@ services:
     # Added health check path for frontend
     healthCheckPath: /
     # Added resource limits to prevent unexpected costs
+    resources:
+      cpu: 0.25
+      memory: 512MB
     envVars:
       - key: REACT_APP_API_URL
         fromService:
           name: chat-app-backend
           type: web
-          property: url
+          property: hostport
       - key: REACT_APP_SOCKET_URL
         fromService:
           name: chat-app-backend
           type: web
-          property: url
+          property: hostport
       # Added build-time environment variable
       - key: REACT_APP_VERSION
         value: "1.0.0"
