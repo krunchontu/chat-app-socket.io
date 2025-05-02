@@ -13,7 +13,7 @@ const Login = () => {
   const [error, setError] = useState("");
   const [errorType, setErrorType] = useState(null); // 'auth', 'network', 'server'
   const [loading, setLoading] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
+  // Removed unused retryCount state
   const navigate = useNavigate();
   const { login } = useAuth();
   const logger = createLogger("Login");
@@ -29,7 +29,7 @@ const Login = () => {
       setError("");
       setErrorType(null);
     }
-  }, [formData]);
+  }, [formData, error]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -76,7 +76,6 @@ const Login = () => {
   
   // Try to login again after fixing connection issues
   const handleRetry = () => {
-    setRetryCount(prev => prev + 1);
     setError("");
     setErrorType(null);
     onSubmit(new Event('submit'));
