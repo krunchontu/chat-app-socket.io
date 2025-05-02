@@ -14,6 +14,7 @@ COPY . .
 # Set environment variables
 ENV NODE_ENV=production
 ENV PORT=4500
+ENV NEW_RELIC_NO_CONFIG_FILE=true
 
 # Expose port
 EXPOSE 4500

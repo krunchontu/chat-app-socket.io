@@ -24,7 +24,7 @@
     "jsonwebtoken": "^9.0.2",
     "logdna": "^3.5.3",
     "mongoose": "^8.14.0",
-    "newrelic": "^11.8.0",
+    "newrelic": "latest",
     "socket.io": "^4.8.1",
     "uuid": "^11.1.0"
   },

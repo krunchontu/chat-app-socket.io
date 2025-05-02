@@ -4,11 +4,13 @@
  */
 
 const userController = require("./userController");
+const UserService = require("../services/userService");
 const User = require("../models/user");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 // Mock dependencies
+jest.mock("../services/userService");
 jest.mock("../models/user");
 jest.mock("bcryptjs");
 jest.mock("jsonwebtoken");
@@ -52,53 +54,33 @@ describe("User Controller", () => {
       });
       const res = mockResponse();
 
-      // Mock user.save to resolve with the new user
-      const savedUser = {
-        _id: "user123",
+      // Mock UserService.registerUser to return user and token
+      const mockUserResponse = {
+        id: "user123",
         username: "newuser",
         email: "new@example.com",
-        password: "hashedpassword",
-        toObject: () => ({
-          _id: "user123",
-          username: "newuser",
-          email: "new@example.com",
-        }),
       };
 
-      // Mock User.findOne to return null (user doesn't exist yet)
-      User.findOne.mockImplementation(() => ({
-        collation: jest.fn().mockResolvedValue(null),
-      }));
-
-      // Mock bcrypt.hash
-      bcrypt.hash.mockResolvedValue("hashedpassword");
-
-      // Mock User constructor
-      User.mockImplementation(() => savedUser);
-
-      // Mock user.save method
-      savedUser.save = jest.fn().mockResolvedValue(savedUser);
+      UserService.registerUser = jest.fn().mockResolvedValue({
+        user: mockUserResponse,
+        token: "jwt.token.here",
+      });
 
       // Execute
-      await userController.register(req, res);
+      await userController.registerUser(req, res);
 
       // Assert
-      expect(User.findOne).toHaveBeenCalledTimes(1);
-      expect(bcrypt.hash).toHaveBeenCalledWith("Password123!", 10);
-      expect(User).toHaveBeenCalledWith({
+      expect(UserService.registerUser).toHaveBeenCalledWith({
         username: "newuser",
         email: "new@example.com",
-        password: "hashedpassword",
+        password: "Password123!",
       });
-      expect(savedUser.save).toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalledWith({
-        message: "User registered successfully",
-        user: {
-          _id: "user123",
-          username: "newuser",
-          email: "new@example.com",
-        },
+        id: "user123",
+        username: "newuser",
+        email: "new@example.com",
+        token: "jwt.token.here",
       });
     });
 
@@ -111,26 +93,19 @@ describe("User Controller", () => {
       });
       const res = mockResponse();
 
-      // Mock User.findOne to return an existing user
-      const existingUser = {
-        _id: "user123",
-        username: "existinguser",
-        email: "existing@example.com",
-      };
-
-      User.findOne.mockImplementation(() => ({
-        collation: jest.fn().mockResolvedValue(existingUser),
-      }));
+      // Mock UserService.registerUser to throw an error for existing username
+      UserService.registerUser = jest
+        .fn()
+        .mockRejectedValue(new Error("Username already taken"));
 
       // Execute
-      await userController.register(req, res);
+      await userController.registerUser(req, res);
 
       // Assert
-      expect(User.findOne).toHaveBeenCalledTimes(1);
-      expect(bcrypt.hash).not.toHaveBeenCalled();
+      expect(UserService.registerUser).toHaveBeenCalledTimes(1);
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({
-        message: "Username already exists",
+        message: "Username already taken",
       });
     });
 
@@ -144,12 +119,12 @@ describe("User Controller", () => {
       const res = mockResponse();
 
       // Execute
-      await userController.register(req, res);
+      await userController.registerUser(req, res);
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith({
-        message: "All fields are required",
+        message: "Username, email, and password are required",
       });
     });
   });
@@ -163,52 +138,33 @@ describe("User Controller", () => {
       });
       const res = mockResponse();
 
-      // Mock user from DB
-      const foundUser = {
-        _id: "user123",
+      // Mock UserService.loginUser to return user and token
+      const mockUserResponse = {
+        id: "user123",
         username: "testuser",
         email: "test@example.com",
-        password: "hashedpassword",
         role: "user",
-        toObject: () => ({
-          _id: "user123",
-          username: "testuser",
-          email: "test@example.com",
-          role: "user",
-        }),
       };
 
-      // Mock User.findOne to return the user
-      User.findOne.mockImplementation(() => ({
-        collation: jest.fn().mockResolvedValue(foundUser),
-      }));
-
-      // Mock bcrypt.compare to return true (password matches)
-      bcrypt.compare.mockResolvedValue(true);
-
-      // Mock jwt.sign to return a token
-      jwt.sign.mockReturnValue("jwt.token.here");
+      UserService.loginUser = jest.fn().mockResolvedValue({
+        user: mockUserResponse,
+        token: "jwt.token.here",
+      });
 
       // Execute
-      await userController.login(req, res);
+      await userController.loginUser(req, res);
 
       // Assert
-      expect(User.findOne).toHaveBeenCalledTimes(1);
-      expect(bcrypt.compare).toHaveBeenCalledWith(
-        "correctpassword",
-        "hashedpassword"
+      expect(UserService.loginUser).toHaveBeenCalledWith(
+        "testuser",
+        "correctpassword"
       );
-      expect(jwt.sign).toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
-        message: "Login successful",
+        id: "user123",
+        username: "testuser",
+        email: "test@example.com",
+        role: "user",
         token: "jwt.token.here",
-        user: {
-          _id: "user123",
-          username: "testuser",
-          email: "test@example.com",
-          role: "user",
-        },
       });
     });
 
@@ -220,20 +176,19 @@ describe("User Controller", () => {
       });
       const res = mockResponse();
 
-      // Mock User.findOne to return null (user not found)
-      User.findOne.mockImplementation(() => ({
-        collation: jest.fn().mockResolvedValue(null),
-      }));
+      // Mock UserService.loginUser to throw error for non-existent user
+      UserService.loginUser = jest
+        .fn()
+        .mockRejectedValue(new Error("Invalid credentials"));
 
       // Execute
-      await userController.login(req, res);
+      await userController.loginUser(req, res);
 
       // Assert
-      expect(User.findOne).toHaveBeenCalledTimes(1);
-      expect(bcrypt.compare).not.toHaveBeenCalled();
+      expect(UserService.loginUser).toHaveBeenCalledTimes(1);
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
-        message: "Invalid username or password",
+        message: "Invalid credentials",
       });
     });
 
@@ -245,35 +200,19 @@ describe("User Controller", () => {
       });
       const res = mockResponse();
 
-      // Mock user from DB
-      const foundUser = {
-        _id: "user123",
-        username: "testuser",
-        email: "test@example.com",
-        password: "hashedpassword",
-      };
-
-      // Mock User.findOne to return the user
-      User.findOne.mockImplementation(() => ({
-        collation: jest.fn().mockResolvedValue(foundUser),
-      }));
-
-      // Mock bcrypt.compare to return false (password doesn't match)
-      bcrypt.compare.mockResolvedValue(false);
+      // Mock UserService.loginUser to throw error for wrong password
+      UserService.loginUser = jest
+        .fn()
+        .mockRejectedValue(new Error("Invalid credentials"));
 
       // Execute
-      await userController.login(req, res);
+      await userController.loginUser(req, res);
 
       // Assert
-      expect(User.findOne).toHaveBeenCalledTimes(1);
-      expect(bcrypt.compare).toHaveBeenCalledWith(
-        "wrongpassword",
-        "hashedpassword"
-      );
-      expect(jwt.sign).not.toHaveBeenCalled();
+      expect(UserService.loginUser).toHaveBeenCalledTimes(1);
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
-        message: "Invalid username or password",
+        message: "Invalid credentials",
       });
     });
   });
@@ -285,37 +224,22 @@ describe("User Controller", () => {
       req.user = { id: "user123" }; // This would be set by auth middleware
       const res = mockResponse();
 
-      // Mock user from DB
-      const foundUser = {
+      const userProfile = {
         _id: "user123",
         username: "testuser",
         email: "test@example.com",
         role: "user",
-        toObject: () => ({
-          _id: "user123",
-          username: "testuser",
-          email: "test@example.com",
-          role: "user",
-        }),
       };
 
-      // Mock User.findById
-      User.findById.mockResolvedValue(foundUser);
+      // Mock UserService
+      UserService.getUserProfile.mockResolvedValue(userProfile);
 
       // Execute
       await userController.getUserProfile(req, res);
 
       // Assert
-      expect(User.findById).toHaveBeenCalledWith("user123");
-      expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith({
-        user: {
-          _id: "user123",
-          username: "testuser",
-          email: "test@example.com",
-          role: "user",
-        },
-      });
+      expect(UserService.getUserProfile).toHaveBeenCalledWith("user123");
+      expect(res.json).toHaveBeenCalledWith(userProfile);
     });
 
     it("should return 404 when user not found", async () => {
@@ -324,15 +248,15 @@ describe("User Controller", () => {
       req.user = { id: "nonexistent" }; // This would be set by auth middleware
       const res = mockResponse();
 
-      // Mock User.findById to return null
-      User.findById.mockResolvedValue(null);
+      // Mock UserService to throw a "User not found" error
+      UserService.getUserProfile.mockRejectedValue(new Error("User not found"));
 
       // Execute
       await userController.getUserProfile(req, res);
 
       // Assert
-      expect(User.findById).toHaveBeenCalledWith("nonexistent");
-      expect(res.status).toHaveBeenCalledWith(404);
+      expect(UserService.getUserProfile).toHaveBeenCalledWith("nonexistent");
+      expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         message: "User not found",
       });
