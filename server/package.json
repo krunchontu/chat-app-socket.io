@@ -35,6 +35,19 @@
   },
   "jest": {
     "testEnvironment": "node",
+    "testMatch": [
+      "**/__tests__/**/*.js",
+      "**/*.test.js",
+      "**/tests/**/*.js"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/coverage/",
+      "/*-script.js",
+      "/server-test.js",
+      "/server-debug.js",
+      "/minimal-server.js"
+    ],
     "coverageThreshold": {
       "global": {
         "branches": 70,
