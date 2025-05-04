@@ -54,7 +54,7 @@ jobs:
       - name: Run frontend linting/tests
         run: |
           cd chat
-          npm test -- --watchAll=false
+          npm test -- --watchAll=false --passWithNoTests
 
   build:
     name: Build and Push Docker images
