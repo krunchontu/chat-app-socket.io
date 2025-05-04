@@ -55,3 +55,5 @@
 - Basic message display and sending
 - Connection status indicators
 - Theme support
+
+- just to add something
