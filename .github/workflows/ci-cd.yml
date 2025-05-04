@@ -20,7 +20,14 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+          # No cache here as we'll set it up per-directory below
+
+      - name: Set up Node.js for server
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
           cache: 'npm'
+          cache-dependency-path: 'server/package-lock.json'
 
       - name: Install backend dependencies
         run: |
@@ -32,6 +39,13 @@ jobs:
           cd server
           npm test
       
+      - name: Set up Node.js for frontend
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'chat/package-lock.json'
+          
       - name: Install frontend dependencies
         run: |
           cd chat
