@@ -1,71 +1,19 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import socketIo from "socket.io-client";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { determineSocketEndpoint } from "../utils/socketConfigUtils";
+import { createSocketConnection } from "../utils/socketFactory";
+import useSocketAuthentication from "./useSocketAuthentication";
+import useSocketErrorHandling from "./useSocketErrorHandling";
+import useConnectionBackoff from "./useConnectionBackoff";
+import useSocketCore from "./useSocketCore";
 import { useAuth } from "../components/common/AuthContext";
-import ErrorService, {
-  ErrorCategory,
-  ErrorSeverity,
-} from "../services/ErrorService";
 import { createLogger } from "../utils/logger";
 
-// Determine if we're in production using NODE_ENV for consistency
-const isProduction = process.env.NODE_ENV === "production";
-
-// Get hostname and prepare for backend URL construction
-const hostname = window.location.hostname;
-
-// Determine the backend host with improved logic
-let backendHost;
-if (hostname.includes("chat-app-frontend")) {
-  // For Render deployments: convert frontend URL to backend URL
-  backendHost = hostname.replace("frontend", "backend");
-} else if (hostname === "localhost" || hostname === "127.0.0.1") {
-  // For local development
-  backendHost = "localhost:4500";
-} else {
-  // For other deployments, assume backend is at same host
-  backendHost = hostname;
-}
-
-// Use environment variable for socket URL across all environments
-// With improved fallback logic for production environments
-const SOCKET_URL =
-  process.env.REACT_APP_SOCKET_URL ||
-  (isProduction ? `https://${backendHost}` : `http://${backendHost}`);
-
-// Force HTTPS in production for security (unless explicitly set otherwise)
-const secureSocketUrl =
-  isProduction &&
-  !SOCKET_URL.startsWith("https://") &&
-  !SOCKET_URL.startsWith("/")
-    ? SOCKET_URL.replace("http://", "https://")
-    : SOCKET_URL;
-
-// Final socket endpoint with proper WebSocket protocol
-const wsProtocol = secureSocketUrl.startsWith("https://") ? "wss" : "ws";
-const httpUrl = secureSocketUrl.startsWith("/")
-  ? window.location.origin + secureSocketUrl
-  : secureSocketUrl;
-
-// Final socket endpoint
-const ENDPOINT = process.env.REACT_APP_SOCKET_URL || httpUrl;
-
 const logger = createLogger("useSocketConnection");
-
-// Log the selected endpoint for debugging
-logger.info("Socket endpoint configuration:", {
-  endpoint: ENDPOINT,
-  secureEndpoint: secureSocketUrl,
-  isProduction,
-  hostname: window.location.hostname,
-  backendHost,
-  env: process.env.NODE_ENV,
-  socketUrl: process.env.REACT_APP_SOCKET_URL,
-  protocol: window.location.protocol,
-});
 
 /**
  * Custom hook to manage the Socket.IO connection lifecycle.
  * Handles connection, authentication, disconnection, errors, and reconnection logic.
+ * Uses modular approach with specialized sub-hooks for different responsibilities.
  *
  * @returns {{
  *   socket: SocketIOClient.Socket | null;
@@ -78,105 +26,82 @@ const useSocketConnection = () => {
   const { user, isAuthenticated, logout } = useAuth();
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [connectionError, setConnectionError] = useState(null);
-  const socketRef = useRef(null); // Ref to hold the socket instance
+  const socketRef = useRef(null);
+  const connectionAttemptTimerRef = useRef(null);
 
-  const clearConnectionError = useCallback(() => {
-    setConnectionError(null);
-  }, []);
+  // Extract socket endpoint configuration
+  const ENDPOINT = determineSocketEndpoint();
 
-  // Function to handle authentication errors specifically
-  const handleAuthError = useCallback(
-    (error) => {
-      logger.error("Socket Authentication Error", error);
-      setConnectionError("Authentication error. Please log in again.");
-      // Optionally trigger logout after a delay
-      setTimeout(() => {
-        logout(); // Use logout function from useAuth
-        // Redirect handled by AuthContext or App routing
-      }, 2000);
-    },
-    [logout]
-  );
+  // Use specialized sub-hooks
+  const {
+    connectionError,
+    clearConnectionError,
+    handleAuthError,
+    handleConnectionError,
+    setConnectionError,
+  } = useSocketErrorHandling(logout);
 
-  useEffect(() => {
-    if (!isAuthenticated || !user) {
-      // If authentication state changes to logged out, disconnect socket
-      if (socketRef.current) {
-        logger.info(
-          "User logged out or unauthenticated, disconnecting socket."
-        );
-        socketRef.current.disconnect();
-        setSocket(null);
-        socketRef.current = null;
-        setIsConnected(false);
-      }
-      return;
-    }
+  const { getAuthToken, authenticateSocket, resetAuthState, getAuthState } =
+    useSocketAuthentication(user);
 
-    // Prevent multiple connections if socket already exists and is connecting/connected
-    if (
-      socketRef.current &&
-      (socketRef.current.connected || socketRef.current.connecting)
-    ) {
-      logger.info(
-        "Socket connection attempt skipped: already connected or connecting."
-      );
-      return;
-    }
+  const {
+    shouldThrottleConnection,
+    getBackoffTime,
+    trackConnectionAttempt,
+    resetBackoff,
+    getCurrentAttemptCount,
+  } = useConnectionBackoff();
 
-    logger.info("Attempting to establish socket connection", {
-      userId: user.id,
-    });
-    const token = localStorage.getItem("token");
+  // Get socket core functionality if socket exists
+  const { getSocketStatus, checkSocketReconnection } = useSocketCore(socket);
 
-    if (!token) {
-      logger.error("Socket connection failed: No auth token found.");
-      setConnectionError("Authentication token not found. Please login again.");
-      return;
-    }
+  // Helper function to set up all socket event handlers - memoized to avoid dependency issues
+  const setupSocketEventHandlers = useCallback(
+    (newSocket) => {
+      if (!newSocket) return;
 
-    const socketOptions = {
-      transports: ["websocket", "polling"],
-      auth: { token },
-      reconnection: true,
-      reconnectionAttempts: 10, // Increased from 5
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 30000, // Increased from 20000
-      path: "/socket.io", // Explicitly set the socket.io path
-      forceNew: false, // Avoid creating multiple connections
-      query: {
-        client_type: "web", // Helps identify client type in logs
-        version: process.env.REACT_APP_VERSION || "1.0.0",
-      },
-    };
+      // Clean up existing connection state
+      resetAuthState();
 
-    try {
-      logger.info("Creating socket connection to:", {
-        endpoint: ENDPOINT,
-        options: JSON.stringify(socketOptions),
-      });
-      const newSocket = socketIo(ENDPOINT, socketOptions);
-      socketRef.current = newSocket; // Store in ref immediately
-      setSocket(newSocket); // Update state
+      // Clear existing event handlers if any
+      newSocket.off("connect");
+      newSocket.off("disconnect");
+      newSocket.off("connect_error");
+      newSocket.off("reconnect");
+      newSocket.off("reconnect_attempt");
+      newSocket.off("reconnect_error");
+      newSocket.off("reconnect_failed");
+      newSocket.off("error");
+      newSocket.off("authenticated");
 
-      logger.info("Socket instance created", { endpoint: ENDPOINT });
-
-      // --- Event Handlers ---
+      // Connection event handlers
       newSocket.on("connect", () => {
         logger.info("Socket connected successfully", {
           socketId: newSocket.id,
+          transport: newSocket.io?.engine?.transport?.name || "unknown",
         });
         setIsConnected(true);
-        setConnectionError(null); // Clear previous errors on successful connect
+        clearConnectionError();
+        authenticateSocket(newSocket);
+        resetBackoff(); // Reset backoff strategy on successful connection
       });
 
       newSocket.on("disconnect", (reason) => {
-        logger.warn("Socket disconnected", { reason, socketId: newSocket.id });
+        logger.warn("Socket disconnected", {
+          reason,
+          socketId: newSocket.id,
+          prevConnected: isConnected,
+        });
         setIsConnected(false);
+
+        // Reset auth state on specific disconnect reasons that indicate auth issues
+        if (reason === "io server disconnect" || reason === "ping timeout") {
+          logger.info("Resetting auth state due to disconnect reason:", reason);
+          resetAuthState();
+        }
+
         // Don't set error for expected disconnects like 'io client disconnect'
-        if (reason !== "io client disconnect") {
+        if (reason !== "io client disconnect" && reason !== "transport close") {
           setConnectionError(
             `Disconnected: ${reason}. Attempting to reconnect...`
           );
@@ -184,33 +109,18 @@ const useSocketConnection = () => {
       });
 
       newSocket.on("connect_error", (error) => {
+        const { isAuthError } = handleConnectionError(error);
         logger.error("Socket connection error", {
-          message: error.message,
-          data: error.data,
-        }); // Log full error
-
-        // Check for specific authentication errors within the error object or message
-        const isAuthError =
-          error.message?.toLowerCase().includes("authentication failed") ||
-          error.message?.toLowerCase().includes("invalid token") ||
-          error.message?.toLowerCase().includes("unauthorized") ||
-          (error.data && error.data.type === "UnauthorizedError"); // Example check if server sends structured error
+          error: error.message,
+          isAuthError,
+          code: error.code,
+          type: error.type,
+        });
 
         if (isAuthError) {
-          handleAuthError(error);
-        } else {
-          const errorMessage = ErrorService.handleError(
-            error,
-            ErrorCategory.SOCKET,
-            ErrorSeverity.ERROR,
-            "socket-connection",
-            { showToast: false } // Let UI decide how to show error
-          );
-          setConnectionError(
-            errorMessage || "Failed to connect to the server."
-          );
+          handleAuthError(error, newSocket, isConnected);
         }
-        setIsConnected(false); // Ensure connection status is false on error
+        setIsConnected(false);
       });
 
       // Reconnection Handlers
@@ -219,7 +129,11 @@ const useSocketConnection = () => {
           socketId: newSocket.id,
         });
         setIsConnected(true);
-        setConnectionError(null);
+        clearConnectionError();
+        resetBackoff();
+
+        // Re-authenticate after reconnection
+        authenticateSocket(newSocket);
       });
 
       newSocket.on("reconnect_attempt", (attemptNumber) => {
@@ -232,7 +146,11 @@ const useSocketConnection = () => {
       });
 
       newSocket.on("reconnect_error", (error) => {
-        logger.error("Socket reconnection error", error);
+        logger.error("Socket reconnection error", {
+          message: error.message,
+          code: error.code,
+          type: error.type,
+        });
         setConnectionError(
           `Reconnection failed: ${error.message}. Retrying...`
         );
@@ -243,31 +161,186 @@ const useSocketConnection = () => {
         setConnectionError(
           "Failed to reconnect to the server. Please check your connection or refresh."
         );
-        // Consider stopping further automatic attempts here if needed
+
+        // Force a new connection attempt with a clean slate
+        setTimeout(() => {
+          if (socketRef.current) {
+            logger.info("Forcing new connection after reconnection failure");
+            socketRef.current.disconnect();
+            socketRef.current = null;
+            setSocket(null);
+            resetBackoff();
+          }
+        }, 1000);
       });
 
-      // Generic error handler for other potential socket errors
+      // Generic error handler
       newSocket.on("error", (error) => {
-        logger.error("Generic socket error event", error);
-        const errorMessage = ErrorService.handleError(
-          error,
-          ErrorCategory.SOCKET,
-          ErrorSeverity.ERROR,
-          "socket-error-event",
-          { showToast: true } // Show toast for unexpected errors
-        );
-        // Avoid overwriting specific connection errors unless it's a new issue
-        if (
-          !connectionError?.includes("Failed to connect") &&
-          !connectionError?.includes("Reconnecting")
-        ) {
-          setConnectionError(
-            errorMessage || "An unexpected socket error occurred."
-          );
-        }
+        logger.error("Generic socket error event", {
+          error: typeof error === "object" ? error.message : error,
+          socketId: newSocket.id,
+        });
+        handleConnectionError(error, { eventType: "error" });
       });
+    },
+    [
+      clearConnectionError,
+      authenticateSocket,
+      resetBackoff,
+      handleConnectionError,
+      handleAuthError,
+      setIsConnected,
+      isConnected,
+      setConnectionError,
+      resetAuthState,
+    ]
+  );
+
+  // Setup socket connection
+  useEffect(() => {
+    // Create a cleanup routine we'll use in multiple places
+    const cleanupConnection = (reason) => {
+      if (connectionAttemptTimerRef.current) {
+        clearTimeout(connectionAttemptTimerRef.current);
+        connectionAttemptTimerRef.current = null;
+      }
+
+      if (socketRef.current) {
+        logger.info("Cleaning up socket connection", {
+          socketId: socketRef.current.id,
+          reason,
+        });
+
+        // Ensure we remove listeners before disconnecting to avoid any callbacks
+        socketRef.current.off();
+        try {
+          socketRef.current.disconnect();
+        } catch (e) {
+          logger.warn("Error during socket disconnect", { error: e.message });
+        }
+
+        socketRef.current = null;
+        setSocket(null);
+        setIsConnected(false);
+      }
+    };
+
+    // User authentication check
+    if (!isAuthenticated || !user) {
+      cleanupConnection("User not authenticated");
+      return;
+    }
+
+    // Connection throttling check with improved handling
+    if (shouldThrottleConnection()) {
+      const waitTime = getBackoffTime();
+      logger.warn(
+        `Throttling connection attempt - waiting ${waitTime}ms before reconnecting`
+      );
+
+      // Clear any existing timer
+      if (connectionAttemptTimerRef.current) {
+        clearTimeout(connectionAttemptTimerRef.current);
+      }
+
+      connectionAttemptTimerRef.current = setTimeout(() => {
+        connectionAttemptTimerRef.current = null;
+        logger.info("Throttle period elapsed, attempting reconnection");
+
+        // Clear error state or update with attempt count
+        setConnectionError((prev) => {
+          if (!prev) return null;
+          const attemptDisplay = getCurrentAttemptCount()
+            ? ` (attempt ${getCurrentAttemptCount()})`
+            : "";
+          return `Reconnecting after delay...${attemptDisplay}`;
+        });
+
+        // Reset connection state completely before trying again
+        cleanupConnection("Reconnection after throttle");
+        resetAuthState();
+      }, waitTime);
+
+      return () => {
+        if (connectionAttemptTimerRef.current) {
+          clearTimeout(connectionAttemptTimerRef.current);
+          connectionAttemptTimerRef.current = null;
+        }
+      };
+    }
+
+    // Existing connection check with improved logging
+    if (socketRef.current) {
+      // Check socket health instead of just trusting its state
+      const status = getSocketStatus();
+
+      if (
+        status.connected ||
+        socketRef.current.connected ||
+        socketRef.current.connecting
+      ) {
+        logger.info(
+          "Socket connection check: already connected or connecting",
+          {
+            reported: {
+              connected: socketRef.current.connected,
+              connecting: socketRef.current.connecting,
+            },
+            health: status,
+          }
+        );
+        return;
+      } else {
+        logger.info("Existing socket found but not connected - will recreate", {
+          health: status,
+        });
+        cleanupConnection("Recreating stale socket");
+      }
+    }
+
+    // Track connection attempt for backoff
+    trackConnectionAttempt();
+
+    // Authentication token check
+    const token = getAuthToken();
+    if (!token) {
+      setConnectionError("Authentication token not found. Please login again.");
+      return;
+    }
+
+    // Create socket connection with improved error handling
+    try {
+      logger.info("Initiating socket connection with endpoint:", { ENDPOINT });
+
+      // Reset auth state before creating a new connection
+      resetAuthState();
+
+      // Create socket with enhanced debug info
+      const newSocket = createSocketConnection(ENDPOINT, token, user);
+
+      // Store reference before setting up handlers to avoid race conditions
+      socketRef.current = newSocket;
+      setSocket(newSocket);
+
+      // Log connection attempt details
+      logger.info("Socket connection attempt initiated", {
+        endpoint: ENDPOINT,
+        hasToken: !!token,
+        userPresent: !!user,
+        socketId: newSocket?.id || "not_available_yet",
+        timestamp: new Date().toISOString(),
+      });
+
+      // --- Set up event handlers ---
+      setupSocketEventHandlers(newSocket);
+
+      // Check for reconnection (for tracking purposes)
+      checkSocketReconnection();
     } catch (error) {
-      logger.error("Error initializing socket instance", error);
+      logger.error("Error initializing socket instance", {
+        error: error.message,
+        stack: error.stack?.split("\n")[0],
+      });
       setConnectionError(
         "Failed to initialize chat connection: " + error.message
       );
@@ -275,26 +348,23 @@ const useSocketConnection = () => {
     }
 
     // --- Cleanup Function ---
-    return () => {
-      if (socketRef.current) {
-        logger.info("Cleaning up socket connection", {
-          socketId: socketRef.current.id,
-        });
-        socketRef.current.off("connect");
-        socketRef.current.off("disconnect");
-        socketRef.current.off("connect_error");
-        socketRef.current.off("reconnect");
-        socketRef.current.off("reconnect_attempt");
-        socketRef.current.off("reconnect_error");
-        socketRef.current.off("reconnect_failed");
-        socketRef.current.off("error");
-        socketRef.current.disconnect();
-        socketRef.current = null; // Clear the ref
-        setSocket(null); // Clear state
-        setIsConnected(false);
-      }
-    };
-  }, [isAuthenticated, user, handleAuthError, connectionError]); // Rerun when auth state changes
+    return () => cleanupConnection("Component unmounting");
+  }, [
+    // Dependencies
+    isAuthenticated,
+    user,
+    ENDPOINT,
+    shouldThrottleConnection,
+    getBackoffTime,
+    trackConnectionAttempt,
+    getCurrentAttemptCount,
+    getAuthToken,
+    setConnectionError,
+    setupSocketEventHandlers,
+    getSocketStatus,
+    checkSocketReconnection,
+    resetAuthState,
+  ]);
 
   return { socket, isConnected, connectionError, clearConnectionError };
 };

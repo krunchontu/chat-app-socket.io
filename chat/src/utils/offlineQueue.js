@@ -189,7 +189,47 @@ export const isOnline = () => navigator.onLine;
  * @returns {Array} Updated messages array
  */
 export const replaceOptimisticMessage = (messages, tempId, serverMessage) => {
-  return messages.map((msg) =>
-    msg.id === tempId ? { ...serverMessage } : msg
-  );
+  // Check for invalid inputs
+  if (!messages || !Array.isArray(messages)) {
+    console.warn(
+      "Invalid messages array in replaceOptimisticMessage",
+      messages
+    );
+    return [];
+  }
+
+  if (!tempId) {
+    console.warn("Missing tempId in replaceOptimisticMessage");
+    return messages;
+  }
+
+  if (!serverMessage) {
+    console.warn("Missing serverMessage in replaceOptimisticMessage");
+    return messages;
+  }
+
+  // Ensure the server message has a consistent ID format
+  const enhancedServerMessage = {
+    ...serverMessage,
+    // Preserve tempId for reference
+    tempId: serverMessage.tempId || tempId,
+    // Ensure 'id' property exists and is consistent
+    id: serverMessage.id || serverMessage._id || tempId,
+  };
+
+  // Log for debugging
+  console.log("Replacing optimistic message", {
+    tempId,
+    newId: enhancedServerMessage.id,
+    serverMessageHasId: !!serverMessage.id,
+  });
+
+  // Replace the message
+  return messages.map((msg) => {
+    // Match on either tempId or message.id
+    if (msg.id === tempId || msg.tempId === tempId) {
+      return enhancedServerMessage;
+    }
+    return msg;
+  });
 };

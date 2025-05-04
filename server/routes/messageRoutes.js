@@ -19,7 +19,7 @@ router.get("/", messageLimiter, auth, getMessages);
 // GET /api/messages/search - Search messages by content
 router.get("/search", messageLimiter, auth, searchMessages);
 
-// GET /api/messages/:parentId/replies - Get replies to a specific message
-router.get("/:parentId/replies", messageLimiter, auth, getMessageReplies);
+// GET /api/messages/replies/:messageId - Get replies to a specific message (fixed param name issue)
+router.get("/replies/:messageId", messageLimiter, auth, getMessageReplies);
 
 module.exports = router;

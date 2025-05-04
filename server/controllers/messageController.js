@@ -196,16 +196,18 @@ const toggleReaction = async (messageId, userId, emoji) => {
 
 // --- Methods primarily for REST API ---
 
-// GET /api/messages/:parentId/replies - Retrieve replies for a message
+// GET /api/messages/replies/:messageId - Retrieve replies for a message
 const getMessageReplies = async (req, res) => {
   try {
-    const { parentId } = req.params;
-    logger.info("Controller: Request to get replies", { parentId });
+    // Updated to use messageId parameter instead of parentId
+    const { messageId } = req.params;
+    logger.info("Controller: Request to get replies", { messageId });
 
     // Validate ID format before hitting the service
-    validateObjectId(parentId);
+    validateObjectId(messageId);
 
-    const replies = await MessageService.getMessageReplies(parentId);
+    // The service method still uses parentId, so we pass messageId as parentId
+    const replies = await MessageService.getMessageReplies(messageId);
     res.status(200).json(replies);
   } catch (error) {
     // Handle specific validation error or general service error

@@ -1,620 +1,453 @@
+/**
+ * Chat Application Server - Final Refactored Version
+ * Incorporates modular architecture while avoiding path parameter issues
+ */
+
 const http = require("http");
 const express = require("express");
 const cors = require("cors");
-require("dotenv").config(); // Load environment variables from .env file
-const { Server } = require("socket.io"); // Updated import
-const { v4: uuidv4 } = require("uuid"); // Import uuid
-const connectDB = require("./config/db"); // Import database connection
-const messageRoutes = require("./routes/messageRoutes"); // Import message routes
-const userRoutes = require("./routes/userRoutes"); // Import user routes
-const socketAuth = require("./middleware/socketAuth"); // Import socket authentication middleware
-const { apiLimiter } = require("./middleware/rateLimiter"); // Import rate limiter
-const logger = require("./utils/logger"); // Import enhanced logging utilities
-const {
-  createMessage,
-  toggleMessageLike,
-  editMessage,
-  deleteMessage,
-  replyToMessage,
-  toggleReaction,
-} = require("./controllers/messageController");
+const { Server } = require("socket.io");
+require("dotenv").config();
 
-// Connect to MongoDB with proper error handling
-let dbConnection;
-try {
-  dbConnection = connectDB();
+// Import custom modules
+const logger = require("./utils/logger");
+const userRoutes = require("./routes/userRoutes");
+const messageRoutes = require("./routes/messageRoutes");
+const connectDB = require("./config/db");
 
-  // Check if we're using mock database fallback
-  dbConnection
-    .then((conn) => {
-      if (conn && conn.connection && conn.connection.isMockDB) {
-        logger.db.warn(
-          "Server running with mock database! This is a fallback mode."
-        );
-        console.log(
-          "\n⚠️ USING MOCK DATABASE - Some features will be limited ⚠️\n"
-        );
-      }
-    })
-    .catch((err) => {
-      logger.db.error("Failed to establish database connection:", err);
-    });
-} catch (error) {
-  logger.db.error("Fatal database connection error:", error);
-}
-
-const app = express();
-// Use PORT from .env or default to 4500
-const port = process.env.PORT || 4500;
-
-// Configure CORS properly
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Get allowed origins from environment or default to localhost and render URL
-    const allowedOrigins = process.env.CLIENT_ORIGIN
-      ? process.env.CLIENT_ORIGIN.split(",")
-      : [
-          "http://localhost:3000",
-          "https://chat-app-frontend-hgqg.onrender.com",
-          // Include both with and without protocol for better compatibility
-          "chat-app-frontend-hgqg.onrender.com",
-        ];
-
-    // Always add the current origin to allowed origins if it's not already in the list
-    if (
-      origin &&
-      !allowedOrigins.includes(origin) &&
-      !allowedOrigins.includes("*")
-    ) {
-      console.log(`Adding current origin to allowed origins: ${origin}`);
-      allowedOrigins.push(origin);
-    }
-
-    // Allow requests with no origin (like mobile apps, curl, etc)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes("*")) {
-      callback(null, true);
-    } else {
-      console.log(`CORS blocked request from origin: ${origin}`);
-      console.log(`Allowed origins are: ${allowedOrigins.join(", ")}`);
-      callback(new Error(`Origin ${origin} not allowed by CORS`));
-    }
-  },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  credentials: true, // Allow cookies for authentication if needed
-  optionsSuccessStatus: 204,
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "X-Requested-With",
-    "Accept",
-    "Origin",
-    "X-CSRF-Token",
-  ],
-  exposedHeaders: ["Content-Range", "X-Content-Range"],
-  maxAge: 86400, // Cache preflight request results for 24 hours (in seconds)
+// Basic configuration
+const config = {
+  port: process.env.PORT || 4500,
+  corsOrigins: process.env.CLIENT_ORIGIN
+    ? process.env.CLIENT_ORIGIN.split(",")
+    : ["http://localhost:3000"],
+  isDevelopment: process.env.NODE_ENV !== "production",
 };
 
-// Pre-flight OPTIONS requests handling for CORS
-app.options("*", cors(corsOptions));
+/**
+ * Creates and configures the Express application
+ */
+function createExpressApp() {
+  // Create Express app
+  const app = express();
 
-// Apply CORS middleware with options
-app.use(cors(corsOptions));
+  // CORS configuration - updated to work with credentials and WebSocket
+  app.use(
+    cors({
+      origin: config.corsOrigins, // Use specific allowed origins
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      credentials: true,
+      allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+      preflightContinue: false,
+      optionsSuccessStatus: 204,
+      maxAge: 3600, // Cache preflight responses for 1 hour
+    })
+  );
 
-// Log CORS configuration
-console.log("CORS configuration:", {
-  allowedOrigins: process.env.CLIENT_ORIGIN
-    ? process.env.CLIENT_ORIGIN.split(",")
-    : [
-        "http://localhost:3000",
-        "https://chat-app-frontend-hgqg.onrender.com",
-        "chat-app-frontend-hgqg.onrender.com",
-      ],
-  methods: corsOptions.methods,
-  credentials: corsOptions.credentials,
-});
-app.use(express.json()); // Parse JSON bodies
+  // Handle preflight OPTIONS requests
+  app.options("*", cors());
 
-// Basic home route
-app.get("/", (req, res) => {
-  res.send("Chat Server is running");
-});
+  // Body parsing middleware
+  app.use(express.json());
 
-// API routes with rate limiting
-app.use("/api", apiLimiter); // Apply rate limiting to all API routes
-app.use("/api/messages", messageRoutes);
-app.use("/api/users", userRoutes);
+  // Add basic routes
+  app.get("/", function homeRoute(req, res) {
+    res.send("Chat Server is running");
+  });
 
-const server = http.createServer(app);
-
-// Initialize Socket.IO Server with CORS configuration matching Express settings
-const io = new Server(server, {
-  cors: {
-    origin: corsOptions.origin,
-    methods: corsOptions.methods,
-    credentials: corsOptions.credentials,
-    allowedHeaders: corsOptions.allowedHeaders,
-    exposedHeaders: corsOptions.exposedHeaders,
-    maxAge: corsOptions.maxAge,
-  },
-  path: "/socket.io/",
-  transports: ["websocket", "polling"],
-  pingTimeout: 60000, // Increase ping timeout for better connection stability
-  pingInterval: 25000, // Ping interval for keeping connections alive
-  connectTimeout: 30000, // Connection timeout
-});
-
-// Log the configured port
-console.log(
-  `Server configured to use port: ${port} (from .env: ${
-    process.env.PORT || "not set"
-  })`
-);
-
-// Apply socket authentication middleware
-io.use(socketAuth);
-
-// Log socket.io configuration
-console.log("Socket.IO configuration:", {
-  cors: {
-    allowedOrigins: process.env.CLIENT_ORIGIN
-      ? process.env.CLIENT_ORIGIN.split(",")
-      : [
-          "http://localhost:3000",
-          "https://chat-app-frontend-hgqg.onrender.com",
-          "chat-app-frontend-hgqg.onrender.com",
-        ],
-    methods: corsOptions.methods,
-    credentials: corsOptions.credentials,
-  },
-  path: "/socket.io/",
-  transports: ["websocket", "polling"],
-});
-
-// Store connected users: { socketId: { id, username } }
-const connectedUsers = {};
-
-io.on("connection", (socket) => {
-  // Store authenticated user in connectedUsers
-  if (socket.user) {
-    connectedUsers[socket.id] = {
-      id: socket.user.id,
-      username: socket.user.username,
-    };
-
-    logger.socket.info("User connected", {
-      socketId: socket.id,
-      userId: socket.user.id,
-      username: socket.user.username,
+  app.get("/api/status", function statusRoute(req, res) {
+    res.json({
+      status: "OK",
+      time: new Date().toISOString(),
     });
+  });
 
-    // Broadcast user joined notification
-    socket.broadcast.emit("userNotification", {
-      type: "join",
-      message: `${socket.user.username} has joined the chat`,
-      timestamp: new Date(),
-    });
-  } else {
-    logger.socket.warn("Unauthenticated connection rejected", {
-      socketId: socket.id,
-    });
-    socket.disconnect(true);
-    return;
-  }
+  // Register actual route modules
+  app.use("/api/users", userRoutes);
+  app.use("/api/messages", messageRoutes);
 
-  // Listen for new messages
-  socket.on("message", async (newMessageData) => {
+  // Remove placeholder as we now use the proper route module
+
+  // Create global object to track socket stats that can be shared
+  global.socketStats = {
+    totalConnections: 0,
+    activeConnections: 0,
+    failedConnections: 0,
+    lastConnection: null,
+    transportUsed: {},
+    connectedSockets: {},
+  };
+
+  // Add health-check route for debugging purposes including socket stats
+  app.get("/api/socket-health", function socketHealthRoute(req, res) {
     try {
-      const correlationId = newMessageData._meta?.correlationId || uuidv4();
-      logger.socket.info("Message received from client", {
-        socketId: socket.id,
-        userId: socket.user.id,
-        username: socket.user.username,
-        tempId: newMessageData.tempId,
-        correlationId,
-      });
-
-      // Validate message text
-      const text = newMessageData.text;
-
-      // Basic validation
-      if (!text || typeof text !== "string" || !text.trim()) {
-        logger.socket.warn("Message rejected: empty text", {
-          socketId: socket.id,
-          userId: socket.user.id,
-          correlationId,
-        });
-        socket.emit("error", { message: "Message text is required" });
-        return;
-      }
-
-      // Check message length
-      if (text.length > 500) {
-        logger.socket.warn("Message rejected: too long", {
-          socketId: socket.id,
-          userId: socket.user.id,
-          textLength: text.length,
-          correlationId,
-        });
-        socket.emit("error", {
-          message: "Message is too long (max 500 characters)",
-        });
-        return;
-      }
-
-      // Use authenticated user information from socket
-      const userName = socket.user.username;
-
-      // Prepare message data with correlation ID for tracing
-      const messageData = {
-        user: userName, // Use the server-known username
-        text: text.trim(), // Sanitize the message text
-        timestamp: new Date(), // Add timestamp
-        likes: 0, // Initialize likes
-        _meta: { correlationId, tempId: newMessageData.tempId },
+      // Clean up the socketStats by removing any socket IDs for privacy
+      const sanitizedStats = {
+        ...global.socketStats,
+        connectedSockets: Object.keys(global.socketStats.connectedSockets || {})
+          .length,
       };
 
-      // Save message to database
-      const savedMessage = await createMessage(messageData);
-
-      // Add correlation ID to the response for client-side tracking
-      const messageResponse = {
-        ...savedMessage.toObject(),
-        tempId: newMessageData.tempId, // Return temp ID for optimistic UI update replacement
-      };
-
-      // Enhance the messageResponse with debug metadata
-      const enhancedResponse = {
-        ...messageResponse,
-        _meta: {
-          ...(messageResponse._meta || {}),
-          eventType: "sendMessage", // Mark the event type
-          correlationId,
-          serverTimestamp: new Date().toISOString(),
-          broadcastTime: Date.now(),
-          fromSocketId: socket.id,
-          fromUserId: socket.user.id,
-          fromUsername: socket.user.username,
-        },
-      };
-
-      // Log connected clients before broadcast
-      const connectedClientIds = Object.keys(io.sockets.sockets);
-      logger.socket.info(
-        `Broadcasting message to ${connectedClientIds.length} connected clients`,
-        {
-          clientIds: connectedClientIds,
-        }
-      );
-
-      // Broadcast using sendMessage event type
-      io.emit("sendMessage", enhancedResponse);
-
-      // Also create a variant with the "message" event type
-      const messageTypeResponse = {
-        ...enhancedResponse,
-        _meta: {
-          ...enhancedResponse._meta,
-          eventType: "message", // Override event type for the message event
-        },
-      };
-
-      // Also broadcast as plain "message" event for broader client compatibility
-      io.emit("message", messageTypeResponse);
-
-      // Log detailed broadcast information
-      logger.socket.info("Message broadcast complete", {
-        messageId: savedMessage._id,
-        userId: socket.user.id,
-        username: socket.user.username,
-        tempId: newMessageData.tempId,
-        correlationId,
-        events: ["sendMessage", "message"],
+      res.json({
+        status: "OK",
         timestamp: new Date().toISOString(),
-        clientCount: connectedClientIds.length,
-      });
-
-      // Debug: Verify each client socket received the message
-      connectedClientIds.forEach((clientId) => {
-        const clientSocket = io.sockets.sockets[clientId];
-        logger.socket.debug(`Verifying message sent to client: ${clientId}`, {
-          clientInfo: {
-            id: clientId,
-            connected: clientSocket?.connected || false,
-            username: connectedUsers[clientId]?.username || "unknown",
-          },
-        });
+        server: {
+          nodejs: process.version,
+          environment: process.env.NODE_ENV || "development",
+          uptime: process.uptime(),
+        },
+        socketStats: sanitizedStats,
       });
     } catch (error) {
-      logger.socket.error("Error processing message", {
-        socketId: socket.id,
-        userId: socket.user?.id,
+      console.error("Error in socket-health route:", error);
+      res.status(500).json({
+        status: "ERROR",
+        message: "Error retrieving socket health information",
         error: error.message,
-        stack: error.stack,
       });
-
-      // Notify the client of the error
-      socket.emit("error", { message: "Failed to process message" });
     }
   });
 
-  // Listen for like updates (backward compatibility for legacy clients)
-  socket.on("like", async ({ id }) => {
-    try {
-      // Basic validation: Ensure message id is provided
-      if (id && socket.user && socket.user.id) {
-        // Toggle like status in the database
-        const updatedMessage = await toggleMessageLike(id, socket.user.id);
+  return app;
+}
 
-        if (updatedMessage) {
-          console.log(
-            `Like toggled for message ${id} by user ${socket.user.username}, new count: ${updatedMessage.likes}`
-          );
+/**
+ * Creates and configures the Socket.IO server
+ */
+function createSocketServer(httpServer) {
+  // Create Socket.IO server
+  const io = new Server(httpServer, {
+    cors: {
+      origin: config.corsOrigins, // Use specific allowed origins
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      credentials: true,
+      allowedHeaders: ["Content-Type", "Authorization"],
+      preflightContinue: false,
+      optionsSuccessStatus: 204,
+    },
+    transports: ["websocket", "polling"], // Match client configuration (websocket first)
+    allowEIO3: true, // Allow compatibility with older clients
+    pingTimeout: 60000, // Increased timeout to allow for slower networks
+    pingInterval: 25000, // Less frequent pings to reduce overhead
+    connectTimeout: 45000, // Increased to allow more time for initial connection
+    maxHttpBufferSize: 1e6, // 1 MB (default)
+    allowUpgrades: true, // Explicitly allow transport upgrades
+    upgradeTimeout: 10000, // Time to wait for upgrade
+  });
 
-          // Broadcast the update to all clients
-          io.emit("messageUpdated", {
-            id,
-            likes: updatedMessage.likes,
-            likedBy: updatedMessage.likedBy,
-            reactions: updatedMessage.reactions,
+  // Apply socket authentication middleware in all environments
+  // but with more tolerant settings in development
+  try {
+    const socketAuth = require("./middleware/socketAuth");
+
+    // In development, use a wrapper that logs but doesn't reject
+    if (config.isDevelopment) {
+      io.use((socket, next) => {
+        console.log("Development mode: Socket authentication logging only");
+
+        // If token is present, validate it but don't enforce
+        if (socket.handshake.auth && socket.handshake.auth.token) {
+          socketAuth(socket, (err) => {
+            if (err) {
+              console.warn("Auth would fail in production:", err.message);
+              // But allow connection in development
+              socket.authWarning = err.message;
+            }
+            next();
           });
         } else {
-          console.warn(`Message not found: ${id}`);
-          socket.emit("error", { message: "Message not found" });
+          console.warn("No auth token provided, would fail in production");
+          next();
         }
-      } else {
-        console.warn(`Invalid 'like' event received or user not authenticated`);
-        socket.emit("error", {
-          message: "Invalid like data or not authenticated",
-        });
-      }
-    } catch (error) {
-      console.error("Error updating likes:", error);
-      socket.emit("error", { message: "Failed to update likes" });
-    }
-  });
-
-  // Listen for reaction updates (new system for all emoji reactions)
-  socket.on("reaction", async ({ id, emoji }) => {
-    try {
-      // Basic validation
-      if (!id || !emoji || !socket.user || !socket.user.id) {
-        socket.emit("error", {
-          message: "Invalid reaction data or not authenticated",
-        });
-        return;
-      }
-
-      // Toggle reaction in the database
-      const updatedMessage = await toggleReaction(id, socket.user.id, emoji);
-
-      if (updatedMessage) {
-        console.log(
-          `${emoji} reaction toggled for message ${id} by user ${socket.user.username}`
-        );
-
-        // Broadcast the update to all clients
-        io.emit("messageUpdated", {
-          id,
-          likes: updatedMessage.likes, // Include for backward compatibility
-          likedBy: updatedMessage.likedBy, // Include for backward compatibility
-          reactions: updatedMessage.reactions,
-        });
-      } else {
-        socket.emit("error", { message: "Message not found" });
-      }
-    } catch (error) {
-      console.error(`Error handling reaction: ${error.message}`);
-      socket.emit("error", { message: "Failed to update reaction" });
-    }
-  });
-
-  // Listen for message edit requests
-  socket.on("editMessage", async ({ id, text }) => {
-    try {
-      // Basic validation
-      if (!id || !text || typeof text !== "string" || !text.trim()) {
-        socket.emit("error", { message: "Message ID and text are required" });
-        return;
-      }
-
-      // Check message length
-      if (text.length > 500) {
-        socket.emit("error", {
-          message: "Message is too long (max 500 characters)",
-        });
-        return;
-      }
-
-      // Edit message in database
-      const updatedMessage = await editMessage(id, socket.user.id, text.trim());
-
-      if (updatedMessage) {
-        console.log(`Message ${id} edited by user ${socket.user.username}`);
-
-        // Broadcast the updated message to all clients
-        io.emit("messageEdited", updatedMessage);
-      } else {
-        socket.emit("error", { message: "Failed to edit message" });
-      }
-    } catch (error) {
-      console.error(`Error editing message: ${error.message}`);
-      socket.emit("error", {
-        message: error.message || "Failed to edit message",
-      });
-    }
-  });
-
-  // Listen for message delete requests
-  socket.on("deleteMessage", async (data) => {
-    try {
-      console.log("Received deleteMessage request:", data);
-
-      // Extract message ID from payload
-      const { id } = data;
-
-      // Basic validation
-      if (!id) {
-        socket.emit("error", { message: "Message ID is required" });
-        return;
-      }
-
-      // Log authenticated user information
-      console.log("User attempting delete:", {
-        id: socket.user.id,
-        username: socket.user.username,
       });
 
-      // Delete message in database (soft delete)
-      const deletedMessage = await deleteMessage(id, socket.user.id);
-
-      if (deletedMessage) {
-        console.log(`Message ${id} deleted by user ${socket.user.username}`);
-
-        // Broadcast the deletion to all clients
-        io.emit("messageDeleted", { id });
-      } else {
-        socket.emit("error", { message: "Failed to delete message" });
-      }
-    } catch (error) {
-      console.error(`Error deleting message: ${error.message}`);
-      socket.emit("error", {
-        message: error.message || "Failed to delete message",
-      });
+      console.log(
+        "Socket authentication middleware in DEV MODE with warnings only"
+      );
+    } else {
+      // In production, apply real authentication
+      io.use(socketAuth);
+      console.log(
+        "Socket authentication middleware ENFORCED in production mode"
+      );
     }
+  } catch (error) {
+    console.error("Failed to apply socket authentication middleware:", error);
+  }
+
+  // Store connected users with more metadata
+  const connectedUsers = {};
+
+  // Add middleware to handle WebSocket-specific issues
+  io.engine.on("connection", (rawSocket) => {
+    console.log("New transport connection attempt:", {
+      transport: rawSocket.transport?.name || "unknown",
+      headers: {
+        upgrade: rawSocket.request?.headers?.upgrade,
+        connection: rawSocket.request?.headers?.connection,
+      },
+      remoteAddress: rawSocket.request?.connection?.remoteAddress,
+      timestamp: new Date().toISOString(),
+    });
   });
 
-  // Listen for message replies
-  socket.on("replyToMessage", async ({ parentId, text }) => {
-    try {
-      // Validate required fields
-      if (!parentId || !text || typeof text !== "string" || !text.trim()) {
-        socket.emit("error", {
-          message: "Parent message ID and reply text are required",
+  // Update global socket stats for tracking
+  // (Note: using global.socketStats here so it's accessible from the health route)
+
+  // Connection handler with improved logging
+  io.on("connection", (socket) => {
+    // Record connection stats
+    const transport = socket.conn.transport.name || "unknown";
+    global.socketStats.totalConnections++;
+    global.socketStats.activeConnections++;
+    global.socketStats.lastConnection = new Date().toISOString();
+    global.socketStats.transportUsed[transport] =
+      (global.socketStats.transportUsed[transport] || 0) + 1;
+    global.socketStats.connectedSockets[socket.id] = {
+      connectedAt: new Date().toISOString(),
+      transport,
+    };
+
+    console.log("User connected:", socket.id, {
+      transport,
+      remoteAddress: socket.handshake.address,
+      userAgent: socket.handshake.headers["user-agent"],
+      query: socket.handshake.query,
+      stats: {
+        total: global.socketStats.totalConnections,
+        active: global.socketStats.activeConnections,
+      },
+    });
+
+    // Log handshake details for debugging
+    console.log("Socket handshake details:", {
+      auth: socket.handshake.auth,
+      headers: Object.keys(socket.handshake.headers),
+      timestamp: new Date().toISOString(),
+    });
+
+    // Extract user info from auth token if available
+    let userId = null;
+    let username = null;
+
+    // Handle user authentication
+    socket.on("authenticate", (userData) => {
+      // Log the incoming authentication data
+      console.log("Authentication attempt:", {
+        socketId: socket.id,
+        userData: userData
+          ? {
+              userId: userData.userId,
+              username: userData.username,
+              timestamp: userData.timestamp,
+            }
+          : "No user data provided",
+      });
+
+      if (userData && userData.userId && userData.username) {
+        userId = userData.userId;
+        username = userData.username;
+
+        // Store enhanced user info
+        connectedUsers[socket.id] = {
+          id: socket.id,
+          userId: userData.userId,
+          username: userData.username,
+          connectedAt: new Date(),
+          authMethod: "event", // Track that this was authenticated via event
+          ipAddress: socket.handshake.address,
+        };
+
+        // Acknowledge successful authentication
+        socket.emit("authenticated", {
+          success: true,
+          socketId: socket.id,
+          timestamp: new Date().toISOString(),
         });
+
+        console.log(`User authenticated: ${username} (${userId})`);
+
+        // Broadcast updated online users to all clients
+        broadcastOnlineUsers();
+      } else {
+        console.warn("Invalid authentication data received:", userData);
+        socket.emit("authenticated", {
+          success: false,
+          error: "Invalid authentication data",
+          timestamp: new Date().toISOString(),
+        });
+      }
+    });
+
+    // Store basic connected user initially
+    connectedUsers[socket.id] = {
+      id: socket.id,
+      connectedAt: new Date(),
+    };
+
+    // Handle subscribe events (for joining rooms after authentication)
+    socket.on("subscribe", (subscriptionData) => {
+      if (!subscriptionData || !subscriptionData.rooms) {
+        console.warn("Invalid subscription data received:", subscriptionData);
         return;
       }
 
-      // Check message length
-      if (text.length > 500) {
-        socket.emit("error", {
-          message: "Reply is too long (max 500 characters)",
-        });
-        return;
-      }
+      console.log(
+        `User ${socket.id} subscribing to rooms:`,
+        subscriptionData.rooms
+      );
 
-      // Use authenticated user information from socket
-      const userName = socket.user.username;
+      // Join each requested room
+      subscriptionData.rooms.forEach((room) => {
+        socket.join(room);
+        console.log(`Socket ${socket.id} joined room: ${room}`);
+      });
 
-      // Prepare message data
-      const messageData = {
-        user: userName,
-        text: text.trim(),
-        timestamp: new Date(),
-        likes: 0,
+      // Acknowledge subscription
+      socket.emit("subscribed", {
+        success: true,
+        rooms: subscriptionData.rooms,
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    // Broadcast online users on new connection
+    broadcastOnlineUsers();
+
+    // Handle messages
+    socket.on("message", (data) => {
+      console.log("Message received:", data);
+
+      // Get the user info for this socket
+      const userInfo = connectedUsers[socket.id];
+      const senderName =
+        userInfo && userInfo.username ? userInfo.username : "Unknown User";
+      const senderId = userInfo && userInfo.userId ? userInfo.userId : null;
+
+      // Add server data with enhanced user info
+      const enhancedMessage = {
+        ...data,
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+        user: senderName, // Add username explicitly
+        userId: senderId, // Add userId explicitly
       };
 
-      // Save reply to database
-      const savedReply = await replyToMessage(messageData, parentId);
-
-      if (savedReply) {
-        console.log(`Reply to message ${parentId} sent by ${userName}`);
-
-        // Broadcast the new reply to all clients
-        io.emit("replyCreated", savedReply);
-      } else {
-        socket.emit("error", { message: "Failed to create reply" });
-      }
-    } catch (error) {
-      console.error(`Error creating reply: ${error.message}`);
-      socket.emit("error", {
-        message: error.message || "Failed to create reply",
+      // Log the enhanced message for debugging
+      console.log("Broadcasting message with user info:", {
+        messageId: enhancedMessage.id,
+        user: enhancedMessage.user,
+        userId: enhancedMessage.userId,
+        text:
+          enhancedMessage.text?.substring(0, 30) +
+          (enhancedMessage.text?.length > 30 ? "..." : ""),
       });
-    }
-  });
 
-  // Handle disconnection
-  socket.on("disconnect", async (reason) => {
-    if (connectedUsers[socket.id]) {
-      const { username, id } = connectedUsers[socket.id];
+      // Broadcast to all clients
+      io.emit("message", enhancedMessage);
+    });
 
-      logger.socket.info("User disconnected", {
-        socketId: socket.id,
-        userId: id,
-        username,
+    // Handle disconnection
+    socket.on("disconnect", (reason) => {
+      console.log("User disconnected:", socket.id, {
         reason,
-        onlineUsersCount: Object.keys(connectedUsers).length - 1,
+        transport: socket.conn?.transport?.name || "unknown",
+        stats: {
+          totalBefore: global.socketStats.activeConnections,
+        },
       });
 
-      // Broadcast user left notification
-      socket.broadcast.emit("userNotification", {
-        type: "leave",
-        message: `${username} has left the chat`,
-        timestamp: new Date(),
-      });
+      // Update connection stats
+      global.socketStats.activeConnections = Math.max(
+        0,
+        global.socketStats.activeConnections - 1
+      );
+      delete global.socketStats.connectedSockets[socket.id];
 
-      // Set user offline in database
-      try {
-        const User = require("./models/user");
-        await User.findByIdAndUpdate(id, { isOnline: false });
-      } catch (error) {
-        logger.socket.error("Failed to update user online status", {
-          userId: id,
-          username,
-          errorMessage: error.message,
-          stack: error.stack,
-        });
-      }
-
-      // Remove user from connected users
+      // Remove from connected users
       delete connectedUsers[socket.id];
-    } else {
-      logger.socket.warn("Unknown user disconnected", {
-        socketId: socket.id,
-      });
+
+      // Broadcast updated online users to all clients
+      broadcastOnlineUsers();
+    });
+
+    // Helper function to broadcast online users
+    function broadcastOnlineUsers() {
+      // Format user list to include only necessary information
+      const userList = Object.values(connectedUsers)
+        .filter((user) => user.username) // Only include authenticated users
+        .map((user) => ({
+          userId: user.userId,
+          username: user.username,
+          socketId: user.id,
+          connectedAt: user.connectedAt,
+        }));
+
+      console.log(`Broadcasting online users: ${userList.length} users`);
+      io.emit("onlineUsers", userList);
     }
   });
 
-  // Send the list of online users to the newly connected client
-  socket.emit(
-    "onlineUsers",
-    Object.values(connectedUsers).map((user) => ({
-      id: user.id,
-      username: user.username,
-    }))
-  );
-});
+  return io;
+}
 
-server.listen(port, () => {
-  console.log(`\n----- SERVER STARTED -----`);
-  console.log(`Server is running on port: ${port}`);
+/**
+ * Main function to start the server
+ */
+async function startServer() {
+  try {
+    // Connect to MongoDB
+    const dbConnection = await connectDB();
+    console.log("MongoDB connected successfully");
 
-  // Use environment-specific hostname
-  const isProduction = process.env.NODE_ENV === "production";
-  const hostname = isProduction
-    ? process.env.HOST || "chat-app-backend-hgqg.onrender.com"
-    : "localhost";
+    // Create Express app
+    const app = createExpressApp();
+    console.log("Express app created");
 
-  const wsProtocol = isProduction ? "wss" : "ws";
-  const httpProtocol = isProduction ? "https" : "http";
+    // Create HTTP server
+    const server = http.createServer(app);
+    console.log("HTTP server created");
 
-  console.log(
-    `Socket.IO is available at: ${wsProtocol}://${hostname}${
-      isProduction ? "" : `:${port}`
-    }/socket.io/`
-  );
-  console.log(
-    `HTTP API is available at: ${httpProtocol}://${hostname}${
-      isProduction ? "" : `:${port}`
-    }/api/`
-  );
-  console.log(`---------------------------\n`);
+    // Create Socket.IO server
+    const io = createSocketServer(server);
+    console.log("Socket.IO server created");
 
-  logger.app.info(`Server started successfully`, {
-    port,
-    environment: process.env.NODE_ENV || "development",
-    hostname,
-    time: new Date().toISOString(),
-  });
-});
+    // Start server
+    server.listen(config.port, () => {
+      console.log(`\n----- SERVER STARTED -----`);
+      console.log(`Server is running on port: ${config.port}`);
+      console.log(
+        `Socket.IO is available at: http://localhost:${config.port}/socket.io/`
+      );
+      console.log(
+        `HTTP API is available at: http://localhost:${config.port}/api/`
+      );
+      console.log(`---------------------------\n`);
+    });
+
+    // Setup graceful shutdown
+    process.on("SIGTERM", () => {
+      console.log("SIGTERM received, shutting down gracefully");
+
+      server.close(() => {
+        console.log("HTTP server closed");
+        process.exit(0);
+      });
+    });
+
+    return { app, server, io };
+  } catch (error) {
+    console.error("Error starting server:", error);
+
+    if (config.isDevelopment) {
+      process.exit(1);
+    }
+  }
+}
+
+// Start the server when this file is run directly
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = { startServer };

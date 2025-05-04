@@ -2,6 +2,7 @@ import React, { memo, useMemo } from 'react';
 import MessageActions from './MessageActions';
 import DOMPurify from 'dompurify';
 import PropTypes from 'prop-types';
+import { useAuth } from '../common/AuthContext';
 
 /**
  * Avatar component for displaying user profile picture or initial
@@ -219,8 +220,40 @@ const MessageItem = memo(({
   formatTime,
   messages
 }) => {
+  // Get current user from auth context
+  const { user } = useAuth();
+  
   // Memoize computed values to prevent recalculations on re-render
-  const isOwn = useMemo(() => message.user === currentUser, [message.user, currentUser]);
+  // Enhanced message ownership determination with multiple checks
+  const isOwn = useMemo(() => {
+    // Ensure we have the necessary data to check ownership
+    if (!message || !user) return false;
+    
+    // Multiple checks for ownership in order of reliability
+    const checks = [
+      // Most reliable: Match by user ID if both are available
+      user.id && message.userId && user.id === message.userId,
+      // Next best: Match by username
+      user.username && message.user && user.username === message.user,
+      // Fallback: Match by current user param (for backward compatibility)
+      currentUser && message.user && currentUser === message.user
+    ];
+    
+    // A message is considered "own" if ANY of the checks pass
+    const result = checks.some(check => check === true);
+    
+    // Debug log for troubleshooting - but only when values change
+    console.debug(`Message ownership check for ID ${message.id}:`, {
+      messageUser: message.user,
+      messageUserId: message.userId,
+      contextUser: user?.username,
+      contextUserId: user?.id,
+      currentUser,
+      result
+    });
+    
+    return result;
+  }, [message, user, currentUser]);
   
   // Find parent message if this is a reply - memoized to avoid recalculations
   const parentMessage = useMemo(() => {

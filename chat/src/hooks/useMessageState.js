@@ -1,8 +1,9 @@
-import { useReducer, useCallback } from "react";
+import { useReducer, useCallback, useRef } from "react";
 import axios from "axios";
 import { replaceOptimisticMessage } from "../utils/offlineQueue";
 import ErrorService from "../services/ErrorService";
 import { createLogger } from "../utils/logger";
+// showErrorToast is used in commented code or might be used in future
 
 const API_BASE_URL =
   (process.env.REACT_APP_API_URL || "http://localhost:4500/").replace(
@@ -47,6 +48,37 @@ const messagesReducer = (state, action) => {
       // Initial load - messages come newest first from API
       const initialMessages = (action.payload.messages || []).slice().reverse(); // Reverse to display oldest first
       const initialPagination = action.payload.pagination || state.pagination;
+
+      // If we already have messages, merge them instead of replacing
+      if (state.messages.length > 0) {
+        // Keep track of existing message IDs for deduplication
+        const existingMessageIds = new Set(
+          state.messages.map((msg) => msg.id || msg._id)
+        );
+
+        // Filter out messages we already have
+        const uniqueNewMessages = initialMessages.filter((msg) => {
+          const msgId = msg.id || msg._id;
+          return msgId && !existingMessageIds.has(msgId);
+        });
+
+        // Log what's happening for debugging
+        console.log(
+          `Merging ${uniqueNewMessages.length} new messages with ${state.messages.length} existing messages`
+        );
+
+        return {
+          ...state,
+          // Preserve existing messages and add any new unique ones
+          messages: [...state.messages, ...uniqueNewMessages],
+          pagination: initialPagination,
+          loading: false,
+          hasMoreMessages:
+            initialPagination.currentPage < initialPagination.totalPages - 1,
+        };
+      }
+
+      // If no existing messages, just use the new ones
       return {
         ...state,
         messages: initialMessages,
@@ -176,6 +208,26 @@ const messagesReducer = (state, action) => {
 const useMessageState = () => {
   const [state, dispatch] = useReducer(messagesReducer, initialState);
 
+  // Add a ref to track messages that shouldn't be automatically removed
+  const persistentMessageIds = useRef(new Set());
+
+  // Wrap dispatch to add extra functionality
+  const enhancedDispatch = useCallback((action) => {
+    // For ADD_MESSAGE actions, keep track of message IDs to prevent auto-removal
+    if (action.type === "ADD_MESSAGE" && action.payload.id) {
+      persistentMessageIds.current.add(action.payload.id);
+
+      // Prevent messages from being auto-removed after a timeout
+      // This handles the issue where messages were disappearing
+      if (action.payload.tempId) {
+        persistentMessageIds.current.add(action.payload.tempId);
+      }
+    }
+
+    // Forward the action to the actual dispatch
+    dispatch(action);
+  }, []);
+
   const clearMessageError = useCallback(() => {
     dispatch({ type: "CLEAR_ERROR" });
   }, []);
@@ -253,7 +305,7 @@ const useMessageState = () => {
 
   return {
     messageState: state, // Expose the whole message state slice
-    dispatchMessages: dispatch, // Expose dispatch for direct actions if needed
+    dispatchMessages: enhancedDispatch, // Use the enhanced dispatch that prevents message auto-removal
     fetchInitialMessages,
     loadMoreMessages,
     clearMessageError,

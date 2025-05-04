@@ -350,12 +350,14 @@ const useMessageOperations = (
       dispatchUi, // Added dependency
       handleOfflineMessage,
       normalizeParentId,
+      emitEvent, // Add emitEvent dependency to fix ESLint warning
     ]
   );
 
   // Toggle a reaction on a message
   const toggleReaction = useCallback(
     async (messageId, emoji) => {
+      // Enhanced validation with more helpful error messages
       if (!isConnected || !socket) {
         dispatchMessages({
           type: "SET_ERROR",
@@ -363,6 +365,7 @@ const useMessageOperations = (
         });
         return false;
       }
+
       if (!emoji) {
         dispatchMessages({
           type: "SET_ERROR",
@@ -371,21 +374,73 @@ const useMessageOperations = (
         return false;
       }
 
-      // TODO: Consider optimistic UI update for reactions?
-      // This is complex because we need to know if the user *already* reacted.
-      // Might be better to wait for server confirmation via 'messageUpdated' event.
+      if (!messageId) {
+        console.error("Missing message ID for reaction:", { messageId, emoji });
+        dispatchMessages({
+          type: "SET_ERROR",
+          payload: "Unable to react: Invalid message reference.",
+        });
+        return false;
+      }
 
+      // Improved error handling and optimistic UI update
       try {
-        // Use enhanced emit function if available
+        // Find the target message to determine if we're adding or removing the reaction
+        const targetMessage = messages.find((msg) => msg.id === messageId);
+
+        // Validate the message exists
+        if (!targetMessage) {
+          console.error(`Message with ID ${messageId} not found for reaction`);
+          return false;
+        }
+
+        // Ensure reactions object exists
+        const currentReactions = targetMessage.reactions || {};
+
+        // Check if user has already reacted with this emoji
+        const emojiUsers = currentReactions[emoji] || [];
+        const userId = user?.id;
+        const hasReacted = userId ? emojiUsers.includes(userId) : false;
+
+        // Create optimistic update payload
+        const updatedReactions = { ...currentReactions };
+
+        if (hasReacted) {
+          // Remove user from this emoji's reactions
+          updatedReactions[emoji] = emojiUsers.filter((id) => id !== userId);
+          // Clean up empty reaction arrays
+          if (updatedReactions[emoji].length === 0) {
+            delete updatedReactions[emoji];
+          }
+        } else {
+          // Add user to this emoji's reactions
+          updatedReactions[emoji] = [...(emojiUsers || []), userId];
+        }
+
+        // Apply optimistic update
+        dispatchMessages({
+          type: "UPDATE_MESSAGE",
+          payload: {
+            id: messageId,
+            reactions: updatedReactions,
+          },
+        });
+
+        // Send to server
         if (emitEvent) {
           emitEvent("reaction", { id: messageId, emoji });
-        } else {
+        } else if (socket) {
           socket.emit("reaction", { id: messageId, emoji });
         }
-        logger.info("Reaction event sent", { messageId, emoji });
+
+        logger.info("Reaction event sent", {
+          messageId,
+          emoji,
+          adding: !hasReacted,
+        });
         return true;
       } catch (error) {
-        logger.error("Error sending reaction event", error);
+        logger.error("Error processing reaction", error);
         dispatchMessages({
           type: "SET_ERROR",
           payload: "Failed to update reaction.",
@@ -393,7 +448,7 @@ const useMessageOperations = (
         return false;
       }
     },
-    [socket, isConnected, dispatchMessages, emitEvent]
+    [socket, isConnected, dispatchMessages, emitEvent, messages, user?.id]
   );
 
   return {

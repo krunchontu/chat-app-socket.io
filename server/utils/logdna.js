@@ -1,11 +1,13 @@
-const { createLogger } = require("logdna");
+const { createLogger } = require("@logdna/logger");
 const os = require("os");
 
-// Initialize LogDNA Logger
+// Initialize LogDNA/Logger
 const initializeLogger = () => {
   // Return a dummy logger if no LogDNA key is provided
   if (!process.env.LOGDNA_KEY) {
-    console.warn("LogDNA key not found. Falling back to console logging.");
+    console.warn(
+      "LogDNA/Logger key not found. Falling back to console logging."
+    );
     return {
       log: console.log,
       info: console.info,
@@ -15,7 +17,7 @@ const initializeLogger = () => {
     };
   }
 
-  // Create a real LogDNA logger
+  // Create a real LogDNA/Logger instance
   const options = {
     app: "chat-app-backend",
     hostname: os.hostname(),
