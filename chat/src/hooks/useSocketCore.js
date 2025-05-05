@@ -24,35 +24,6 @@ const useSocketCore = (socket) => {
     connectionErrors: [], // Track specific connection errors
   });
 
-  // Set up regular socket health check
-  useEffect(() => {
-    if (!socket) return;
-
-    // Check socket health every 10 seconds
-    const healthCheckInterval = setInterval(() => {
-      const status = getSocketStatus();
-
-      if (
-        !status.connected &&
-        connectionStatsRef.current.socketState === "connected"
-      ) {
-        // Socket was connected but is now disconnected
-        logger.warn("Socket health check detected disconnect", status);
-        connectionStatsRef.current.socketState = "disconnected";
-      } else if (
-        status.connected &&
-        connectionStatsRef.current.socketState !== "connected"
-      ) {
-        // Socket is connected but state doesn't reflect it
-        logger.info("Socket health check detected connection", status);
-        connectionStatsRef.current.socketState = "connected";
-        connectionStatsRef.current.lastConnectedAt = new Date().toISOString();
-      }
-    }, 10000);
-
-    return () => clearInterval(healthCheckInterval);
-  }, [socket]);
-
   // Safely get socket ID with enhanced fallback methods
   const getSafeSocketId = useCallback(() => {
     // Try multiple ways to get the socket ID
@@ -107,6 +78,64 @@ const useSocketCore = (socket) => {
     return id || "unidentified";
   }, [socket]);
 
+  // Get basic socket status information
+  const getSocketStatus = useCallback(() => {
+    const id = getSafeSocketId();
+    const isConnected = socket?.connected || false;
+
+    // Update socket state based on connection status
+    if (isConnected && connectionStatsRef.current.socketState !== "connected") {
+      connectionStatsRef.current.socketState = "connected";
+      connectionStatsRef.current.lastConnectedAt = new Date().toISOString();
+    } else if (
+      !isConnected &&
+      socket &&
+      connectionStatsRef.current.socketState === "connected"
+    ) {
+      connectionStatsRef.current.socketState = "disconnected";
+    }
+
+    return {
+      id,
+      connected: isConnected,
+      connecting: socket?.connecting || false,
+      reconnectCount: connectionStatsRef.current.reconnectCount,
+      lastConnectedAt: connectionStatsRef.current.lastConnectedAt,
+      socketState: connectionStatsRef.current.socketState,
+      readyState: socket?.io?.engine?.readyState || "closed",
+      transport: socket?.io?.engine?.transport?.name || "none",
+    };
+  }, [socket, getSafeSocketId]);
+
+  // Set up regular socket health check
+  useEffect(() => {
+    if (!socket) return;
+
+    // Check socket health every 10 seconds
+    const healthCheckInterval = setInterval(() => {
+      const status = getSocketStatus();
+
+      if (
+        !status.connected &&
+        connectionStatsRef.current.socketState === "connected"
+      ) {
+        // Socket was connected but is now disconnected
+        logger.warn("Socket health check detected disconnect", status);
+        connectionStatsRef.current.socketState = "disconnected";
+      } else if (
+        status.connected &&
+        connectionStatsRef.current.socketState !== "connected"
+      ) {
+        // Socket is connected but state doesn't reflect it
+        logger.info("Socket health check detected connection", status);
+        connectionStatsRef.current.socketState = "connected";
+        connectionStatsRef.current.lastConnectedAt = new Date().toISOString();
+      }
+    }, 10000);
+
+    return () => clearInterval(healthCheckInterval);
+  }, [socket, getSocketStatus]); // Added getSocketStatus dependency
+
   // Check if this is a new socket connection and update tracking
   const checkSocketReconnection = useCallback(() => {
     if (!socket) return false;
@@ -147,35 +176,6 @@ const useSocketCore = (socket) => {
     }
 
     return hasReconnected;
-  }, [socket, getSafeSocketId]);
-
-  // Get basic socket status information
-  const getSocketStatus = useCallback(() => {
-    const id = getSafeSocketId();
-    const isConnected = socket?.connected || false;
-
-    // Update socket state based on connection status
-    if (isConnected && connectionStatsRef.current.socketState !== "connected") {
-      connectionStatsRef.current.socketState = "connected";
-      connectionStatsRef.current.lastConnectedAt = new Date().toISOString();
-    } else if (
-      !isConnected &&
-      socket &&
-      connectionStatsRef.current.socketState === "connected"
-    ) {
-      connectionStatsRef.current.socketState = "disconnected";
-    }
-
-    return {
-      id,
-      connected: isConnected,
-      connecting: socket?.connecting || false,
-      reconnectCount: connectionStatsRef.current.reconnectCount,
-      lastConnectedAt: connectionStatsRef.current.lastConnectedAt,
-      socketState: connectionStatsRef.current.socketState,
-      readyState: socket?.io?.engine?.readyState || "closed",
-      transport: socket?.io?.engine?.transport?.name || "none",
-    };
   }, [socket, getSafeSocketId]);
 
   return {

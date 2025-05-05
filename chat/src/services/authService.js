@@ -300,7 +300,7 @@ export const clearAuth = () => {
   apiService.setupAxiosAuth(null);
 };
 
-export default {
+const authService = {
   initializeAuth,
   login,
   register,
@@ -308,3 +308,5 @@ export default {
   validateAuthentication,
   clearAuth,
 };
+
+export default authService;

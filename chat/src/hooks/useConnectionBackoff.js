@@ -71,6 +71,26 @@ const useConnectionBackoff = () => {
   }, []);
 
   /**
+   * Resets the backoff strategy
+   */
+  const resetBackoff = useCallback(() => {
+    // Clear any pending reset timer
+    if (connectionAttemptsRef.current.resetTimer) {
+      clearTimeout(connectionAttemptsRef.current.resetTimer);
+    }
+
+    // Reset state
+    connectionAttemptsRef.current = {
+      count: 0,
+      lastAttempt: 0,
+      backoffDelay: 300, // Reset to initial delay
+      maxAttempts: 20,
+      resetTimer: null,
+    };
+    logger.info("Backoff strategy reset");
+  }, []);
+
+  /**
    * Records a connection attempt
    */
   const trackConnectionAttempt = useCallback(() => {
@@ -101,27 +121,7 @@ const useConnectionBackoff = () => {
         resetBackoff();
       }
     }, 15000);
-  }, []);
-
-  /**
-   * Resets the backoff strategy
-   */
-  const resetBackoff = useCallback(() => {
-    // Clear any pending reset timer
-    if (connectionAttemptsRef.current.resetTimer) {
-      clearTimeout(connectionAttemptsRef.current.resetTimer);
-    }
-
-    // Reset state
-    connectionAttemptsRef.current = {
-      count: 0,
-      lastAttempt: 0,
-      backoffDelay: 300, // Reset to initial delay
-      maxAttempts: 20,
-      resetTimer: null,
-    };
-    logger.info("Backoff strategy reset");
-  }, []);
+  }, [resetBackoff]); // Added resetBackoff dependency
 
   return {
     shouldThrottleConnection,

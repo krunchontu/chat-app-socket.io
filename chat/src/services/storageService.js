@@ -184,7 +184,7 @@ export const clearAuthData = () => {
   return userSuccess && tokenSuccess;
 };
 
-export default {
+const storageService = {
   getItem,
   setItem,
   removeItem,
@@ -195,3 +195,5 @@ export default {
   setAuthData,
   clearAuthData,
 };
+
+export default storageService;

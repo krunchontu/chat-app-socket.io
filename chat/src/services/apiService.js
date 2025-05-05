@@ -7,7 +7,7 @@
 
 import axios from "axios";
 import { getApiEndpointUrl, logApiUrlConfiguration } from "../utils/urlUtils";
-import ErrorService, { ErrorCategory } from "./ErrorService";
+import ErrorService from "./ErrorService"; // Removed unused ErrorCategory
 import { createServiceLogger } from "../utils/logger";
 
 // Create a logger for the API service
@@ -248,7 +248,7 @@ export const makeRequest = async (options) => {
   }
 };
 
-export default {
+const apiService = {
   get,
   post,
   put,
@@ -257,3 +257,5 @@ export default {
   setupAxiosAuth,
   makeRequest,
 };
+
+export default apiService;

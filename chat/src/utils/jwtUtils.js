@@ -146,9 +146,11 @@ export const getTokenTimeRemaining = (tokenOrDecoded) => {
   };
 };
 
-export default {
+const jwtUtils = {
   decodeToken,
   isTokenExpiring,
   validateToken,
   getTokenTimeRemaining,
 };
+
+export default jwtUtils;

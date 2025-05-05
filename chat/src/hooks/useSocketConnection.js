@@ -41,8 +41,11 @@ const useSocketConnection = () => {
     setConnectionError,
   } = useSocketErrorHandling(logout);
 
-  const { getAuthToken, authenticateSocket, resetAuthState, getAuthState } =
-    useSocketAuthentication(user);
+  const {
+    getAuthToken,
+    authenticateSocket,
+    resetAuthState,
+  } = useSocketAuthentication(user); // Removed unused getAuthState
 
   const {
     shouldThrottleConnection,

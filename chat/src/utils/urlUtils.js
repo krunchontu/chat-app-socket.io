@@ -135,9 +135,11 @@ export const logApiUrlConfiguration = (operationName, endpoint) => {
   return config;
 };
 
-export default {
+const urlUtils = {
   getApiUrl,
   getSocketUrl,
   getApiEndpointUrl,
   logApiUrlConfiguration,
 };
+
+export default urlUtils;
