@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.1] - 2025-05-05
+
+### Changed
+- Updated GitHub Actions workflow to use Render deploy hooks instead of the JorgeLNJunior/render-deploy action
+- Added documentation for setting up Render deploy hooks in `docs/render-deploy-hooks-setup.md`
+
+### Fixed
+- Fixed deployment to Render failing due to missing service_id parameter
+
 ## [2.0.0] - 2025-05-01
 
 ### Added
