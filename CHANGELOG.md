@@ -1,36 +1,59 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## [1.1.0] - 2025-05-05
 
-## [2.0.0] - 2025-05-01
+### Socket Connection Improvements
 
-### Added
-- Complete CI/CD pipeline with branch-specific workflows
-  - `develop` branch: Triggers CI (tests and build)
-  - `release` branch: Triggers CI/CD (tests, build, and deploy)
-- Comprehensive test suite with three unit test files:
-  - Message service tests
-  - Socket authentication tests
-  - User controller tests
-- Branch initialization scripts:
-  - `init-branches.sh` for Unix/Linux/Mac
-  - `init-branches.ps1` for Windows
-- MongoDB Atlas integration for containerized deployments
-- Enhanced documentation:
-  - CONTRIBUTING.md with branch strategy and workflow guidelines
-  - Updated README.md with CI/CD pipeline information
+#### Transport Layer Enhancement
+- Added transport fallback support (WebSocket → Polling)
+- Improved transport upgrade monitoring
+- Enhanced connection stability with optimized timeouts
+- Added detailed transport state logging
 
-### Changed
-- Updated GitHub Actions workflow for branch-specific behavior
-- Modified test scripts to ensure tests must pass for the pipeline to continue
-- Updated docker-compose.yml to work with MongoDB Atlas instead of local MongoDB
-- Enhanced server package.json with Jest configuration
-- Improved error handling in tests
+#### Connection Management
+- Implemented connection stabilization delay
+- Added comprehensive connection state monitoring
+- Improved cleanup of stale connections
+- Enhanced error recovery mechanisms
 
-### Fixed
-- Removed fallback mechanisms that would allow CI pipeline to continue despite test failures
-- Addressed potential environment variable naming inconsistencies
+#### Authentication Flow
+- Added connection stabilization before authentication
+- Improved retry logic with configurable parameters
+- Enhanced transport state validation
+- Added timeout handling for authentication attempts
+- Improved error handling and reporting
 
-## [1.0.0] - Initial Release
+### Configuration Updates
 
-- Initial version of the chat application
+#### Client Configuration
+- Updated socket factory with enhanced transport options
+- Optimized reconnection parameters
+- Added transport upgrade monitoring
+- Improved error instrumentation
+
+#### Server Configuration
+- Matched client/server timeout settings
+- Enhanced connection monitoring
+- Added detailed connection logging
+- Improved transport upgrade handling
+
+### Technical Details
+
+#### Client Changes
+- `socketFactory.js`: Added transport fallback and monitoring
+- `useSocketConnection.js`: Improved connection lifecycle management
+- `useSocketAuthentication.js`: Enhanced authentication flow and retry logic
+
+#### Server Changes
+- `socketConfig.js`: Updated server configuration for better stability
+- Added enhanced connection monitoring
+- Improved error handling and logging
+
+### Bug Fixes
+- Fixed WebSocket connection failures
+- Resolved authentication timing issues
+- Improved handling of transport upgrades
+- Fixed connection cleanup issues
+
+## Previous Versions
+[Link to previous changelog entries]

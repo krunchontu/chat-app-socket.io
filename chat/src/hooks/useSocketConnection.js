@@ -41,11 +41,8 @@ const useSocketConnection = () => {
     setConnectionError,
   } = useSocketErrorHandling(logout);
 
-  const {
-    getAuthToken,
-    authenticateSocket,
-    resetAuthState,
-  } = useSocketAuthentication(user); // Removed unused getAuthState
+  const { getAuthToken, authenticateSocket, resetAuthState } =
+    useSocketAuthentication(user); // Removed unused getAuthState
 
   const {
     shouldThrottleConnection,
@@ -77,16 +74,38 @@ const useSocketConnection = () => {
       newSocket.off("error");
       newSocket.off("authenticated");
 
-      // Connection event handlers
-      newSocket.on("connect", () => {
+      // Connection event handlers with stabilization delay
+      newSocket.on("connect", async () => {
         logger.info("Socket connected successfully", {
           socketId: newSocket.id,
           transport: newSocket.io?.engine?.transport?.name || "unknown",
+          readyState: newSocket.io?.engine?.readyState,
+          protocol: newSocket.io?.engine?.protocol,
         });
-        setIsConnected(true);
-        clearConnectionError();
-        authenticateSocket(newSocket);
-        resetBackoff(); // Reset backoff strategy on successful connection
+
+        // Wait for connection to stabilize before proceeding
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        if (newSocket.connected) {
+          setIsConnected(true);
+          clearConnectionError();
+          resetBackoff(); // Reset backoff strategy on successful connection
+
+          // Monitor transport state before authentication
+          const transport = newSocket.io?.engine?.transport;
+          if (transport) {
+            logger.info("Transport state before authentication:", {
+              name: transport.name,
+              readyState: transport.readyState,
+              writable: transport.writable,
+            });
+          }
+
+          // Attempt authentication only if still connected
+          authenticateSocket(newSocket);
+        } else {
+          logger.warn("Socket disconnected during stabilization period");
+        }
       });
 
       newSocket.on("disconnect", (reason) => {
@@ -94,21 +113,36 @@ const useSocketConnection = () => {
           reason,
           socketId: newSocket.id,
           prevConnected: isConnected,
+          transport: newSocket.io?.engine?.transport?.name,
+          readyState: newSocket.io?.engine?.readyState,
         });
         setIsConnected(false);
 
-        // Reset auth state on specific disconnect reasons that indicate auth issues
-        if (reason === "io server disconnect" || reason === "ping timeout") {
-          logger.info("Resetting auth state due to disconnect reason:", reason);
-          resetAuthState();
+        // Enhanced disconnect handling
+        switch (reason) {
+          case "io server disconnect":
+          case "ping timeout":
+            logger.info("Critical disconnect - resetting auth state:", reason);
+            resetAuthState();
+            setConnectionError("Connection lost. Server disconnected.");
+            break;
+          case "transport close":
+            if (newSocket.io?.engine?.transport?.name === "websocket") {
+              logger.info("WebSocket closed - attempting transport fallback");
+              // Let socket.io handle transport fallback
+            }
+            break;
+          case "io client disconnect":
+            logger.info("Clean disconnect by client");
+            break;
+          default:
+            setConnectionError(
+              `Disconnected: ${reason}. Attempting to reconnect...`
+            );
         }
 
-        // Don't set error for expected disconnects like 'io client disconnect'
-        if (reason !== "io client disconnect" && reason !== "transport close") {
-          setConnectionError(
-            `Disconnected: ${reason}. Attempting to reconnect...`
-          );
-        }
+        // Track disconnect for backoff strategy
+        trackConnectionAttempt();
       });
 
       newSocket.on("connect_error", (error) => {
@@ -177,13 +211,45 @@ const useSocketConnection = () => {
         }, 1000);
       });
 
-      // Generic error handler
+      // Enhanced error handling
       newSocket.on("error", (error) => {
-        logger.error("Generic socket error event", {
+        logger.error("Socket error event", {
           error: typeof error === "object" ? error.message : error,
           socketId: newSocket.id,
+          transport: newSocket.io?.engine?.transport?.name,
+          readyState: newSocket.io?.engine?.readyState,
+          protocol: newSocket.io?.engine?.protocol,
+          upgrades: newSocket.io?.engine?.upgrades,
         });
-        handleConnectionError(error, { eventType: "error" });
+
+        // Check if error is recoverable
+        const isRecoverable = !error.fatal && newSocket.connected;
+        if (!isRecoverable) {
+          handleConnectionError(error, {
+            eventType: "error",
+            context: {
+              transport: newSocket.io?.engine?.transport?.name,
+              readyState: newSocket.io?.engine?.readyState,
+            },
+          });
+        }
+      });
+
+      // Monitor transport upgrades
+      newSocket.io?.engine?.on("upgrade", (transport) => {
+        logger.info("Transport upgraded", {
+          from: newSocket.io?.engine?.transport?.name,
+          to: transport.name,
+          readyState: transport.readyState,
+        });
+      });
+
+      // Monitor failed upgrades
+      newSocket.io?.engine?.on("upgradeError", (err) => {
+        logger.warn("Transport upgrade failed", {
+          error: err.message,
+          transport: newSocket.io?.engine?.transport?.name,
+        });
       });
     },
     [

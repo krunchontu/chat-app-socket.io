@@ -27,12 +27,34 @@ const createSocketServer = (server, corsOptions) => {
     },
     path: "/socket.io/",
     transports: ["websocket", "polling"],
-    pingTimeout: 60000, // Increase ping timeout for better connection stability
-    pingInterval: 25000, // Ping interval for keeping connections alive
-    connectTimeout: 30000, // Connection timeout
+    upgradeTimeout: 10000, // Match client upgrade timeout
+    pingTimeout: 30000, // Reduced for faster failure detection
+    pingInterval: 10000, // More frequent keepalive
+    connectTimeout: 45000, // Match client timeout
+    maxHttpBufferSize: 1e6, // 1 MB
+    allowUpgrades: true, // Enable transport upgrades
+    transports: ["polling", "websocket"], // Start with polling for better compatibility
   });
 
-  // Log socket.io configuration
+  // Enhanced connection monitoring
+  io.engine.on("connection_error", (err) => {
+    logger.app.error("Transport connection error:", {
+      error: err.message,
+      code: err.code,
+      context: err.context,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  io.engine.on("initial_headers", (headers, req) => {
+    logger.app.debug("Initial headers for new connection:", {
+      remoteAddress: req.connection.remoteAddress,
+      transport: req.headers.upgrade ? "websocket" : "polling",
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // Enhanced logging of socket.io configuration
   logger.app.info("Socket.IO configuration initialized", {
     cors: {
       allowedOrigins:
@@ -43,7 +65,16 @@ const createSocketServer = (server, corsOptions) => {
       credentials: corsOptions.credentials,
     },
     path: "/socket.io/",
-    transports: ["websocket", "polling"],
+    transports: ["polling", "websocket"],
+    timeouts: {
+      connect: 45000,
+      ping: 30000,
+      upgrade: 10000,
+    },
+    features: {
+      upgradeEnabled: true,
+      maxBufferSize: "1 MB",
+    },
   });
 
   // Apply socket authentication middleware

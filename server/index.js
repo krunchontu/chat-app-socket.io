@@ -140,39 +140,12 @@ function createSocketServer(httpServer) {
   try {
     const socketAuth = require("./middleware/socketAuth");
 
-    // In development, use a wrapper that logs but doesn't reject
-    if (config.isDevelopment) {
-      io.use((socket, next) => {
-        console.log("Development mode: Socket authentication logging only");
-
-        // If token is present, validate it but don't enforce
-        if (socket.handshake.auth && socket.handshake.auth.token) {
-          socketAuth(socket, (err) => {
-            if (err) {
-              console.warn("Auth would fail in production:", err.message);
-              // But allow connection in development
-              socket.authWarning = err.message;
-            }
-            next();
-          });
-        } else {
-          console.warn("No auth token provided, would fail in production");
-          next();
-        }
-      });
-
-      console.log(
-        "Socket authentication middleware in DEV MODE with warnings only"
-      );
-    } else {
-      // In production, apply real authentication
-      io.use(socketAuth);
-      console.log(
-        "Socket authentication middleware ENFORCED in production mode"
-      );
-    }
+    // Apply socket authentication middleware directly
+    io.use(socketAuth);
+    console.log("Socket authentication middleware applied");
   } catch (error) {
     console.error("Failed to apply socket authentication middleware:", error);
+    // Consider if the server should fail to start if auth middleware fails
   }
 
   // Store connected users with more metadata

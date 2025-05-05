@@ -13,13 +13,20 @@ const logger = createLogger("useSocketAuthentication");
  * @returns {Object} Authentication utilities
  */
 const useSocketAuthentication = (user) => {
-  // Track authentication state
+  // Enhanced authentication state tracking
   const authStateRef = useRef({
     authSent: false,
     authConfirmed: false,
     lastAuthTime: null,
     attempts: 0,
     errors: [],
+    lastError: null,
+    transportAtAuth: null,
+    authTimeoutId: null,
+    retryTimeoutId: null,
+    maxRetries: 3,
+    retryDelay: 2000,
+    authTimeout: 5000,
   });
 
   /**
@@ -44,123 +51,200 @@ const useSocketAuthentication = (user) => {
    *
    * @param {SocketIOClient.Socket} socket - Socket instance to authenticate
    */
+  // Clear any pending timeouts
+  const clearTimeouts = useCallback(() => {
+    if (authStateRef.current.authTimeoutId) {
+      clearTimeout(authStateRef.current.authTimeoutId);
+      authStateRef.current.authTimeoutId = null;
+    }
+    if (authStateRef.current.retryTimeoutId) {
+      clearTimeout(authStateRef.current.retryTimeoutId);
+      authStateRef.current.retryTimeoutId = null;
+    }
+  }, []);
+
   const authenticateSocket = useCallback(
     (socket) => {
       if (!socket) return;
 
-      // Send authentication data to the server after connecting
-      if (user && user.id && user.username) {
-        logger.info("Authenticating with socket server", {
-          userId: user.id,
-          username: user.username,
-          socketId: socket.id || "not_available_yet",
-          attempt: authStateRef.current.attempts + 1,
-        });
+      // Clear any existing timeouts
+      clearTimeouts();
 
-        // Track authentication attempt
-        authStateRef.current.authSent = true;
-        authStateRef.current.lastAuthTime = new Date().toISOString();
-        authStateRef.current.attempts += 1;
-
-        // Listen for authentication confirmation from server
-        socket.off("authenticated"); // Remove any existing listener
-        socket.on("authenticated", (response) => {
-          if (response.success) {
-            logger.info("Socket authentication confirmed by server", {
-              socketId: response.socketId,
-              timestamp: response.timestamp,
-            });
-
-            authStateRef.current.authConfirmed = true;
-
-            // Re-subscribe to key events now that we're authenticated
-            socket.emit("subscribe", { rooms: ["general"] });
-
-            // Listen for subscription confirmation
-            socket.off("subscribed"); // Remove previous listener if any
-            socket.on("subscribed", (response) => {
-              if (response.success) {
-                logger.info("Successfully subscribed to rooms", {
-                  rooms: response.rooms,
-                  timestamp: response.timestamp,
-                });
-              } else {
-                logger.warn("Failed to subscribe to rooms", {
-                  error: response.error,
-                });
-              }
-            });
-          } else {
-            logger.error("Socket authentication rejected by server", {
-              error: response.error,
-              timestamp: response.timestamp,
-            });
-
-            authStateRef.current.errors.push({
-              time: new Date().toISOString(),
-              error: response.error,
-            });
-
-            // Try to re-authenticate after a delay if needed
-            if (authStateRef.current.attempts < 3) {
-              setTimeout(() => {
-                logger.info("Retrying socket authentication");
-                sendAuthData(socket);
-              }, 2000);
-            }
-          }
-        });
-
-        // Function to actually send the auth data
-        const sendAuthData = (s) => {
-          // Send authenticate event with user details
-          s.emit("authenticate", {
-            userId: user.id, // Server expects userId, not id
-            username: user.username,
-            timestamp: new Date().toISOString(), // Add timestamp for tracing
-          });
-        };
-
-        // Send the authentication data now
-        sendAuthData(socket);
-
-        // Set a timeout to verify authentication status
-        setTimeout(() => {
-          if (socket.connected && !authStateRef.current.authConfirmed) {
-            logger.warn("No authentication confirmation received", {
-              socketId: socket.id,
-              connected: socket.connected,
-              timeSinceAuth:
-                new Date().getTime() -
-                new Date(authStateRef.current.lastAuthTime).getTime(),
-            });
-          }
-        }, 3000);
-      } else {
+      // Validate socket and user state
+      if (!user?.id || !user?.username) {
         logger.warn("Cannot authenticate socket - missing user data", {
           userPresent: !!user,
           userId: user?.id,
           socketId: socket?.id,
         });
+        return;
       }
+
+      // Check socket transport state
+      const transport = socket.io?.engine?.transport;
+      const transportState = {
+        name: transport?.name || "unknown",
+        readyState: transport?.readyState,
+        writable: transport?.writable,
+        protocol: socket.io?.engine?.protocol,
+      };
+
+      logger.info("Authenticating with socket server", {
+        userId: user.id,
+        username: user.username,
+        socketId: socket.id || "not_available_yet",
+        attempt: authStateRef.current.attempts + 1,
+        transport: transportState,
+      });
+
+      // Update auth state
+      authStateRef.current.authSent = true;
+      authStateRef.current.lastAuthTime = new Date().toISOString();
+      authStateRef.current.attempts += 1;
+      authStateRef.current.transportAtAuth = transportState;
+
+      // Set up authentication timeout
+      authStateRef.current.authTimeoutId = setTimeout(() => {
+        if (!authStateRef.current.authConfirmed) {
+          const currentTransport = socket.io?.engine?.transport;
+          logger.error("Authentication timeout", {
+            initialTransport: authStateRef.current.transportAtAuth,
+            currentTransport: {
+              name: currentTransport?.name,
+              readyState: currentTransport?.readyState,
+              writable: currentTransport?.writable,
+            },
+            attempts: authStateRef.current.attempts,
+            connected: socket.connected,
+          });
+
+          // Retry if under max attempts
+          if (authStateRef.current.attempts < authStateRef.current.maxRetries) {
+            retryAuthentication(socket);
+          }
+        }
+      }, authStateRef.current.authTimeout);
+
+      // Enhanced authentication listener
+      socket.off("authenticated").on("authenticated", (response) => {
+        if (response.success) {
+          clearTimeouts();
+
+          logger.info("Socket authentication confirmed by server", {
+            socketId: response.socketId,
+            timestamp: response.timestamp,
+            transport: socket.io?.engine?.transport?.name,
+          });
+
+          authStateRef.current.authConfirmed = true;
+          authStateRef.current.lastError = null;
+
+          // Subscribe to rooms with error handling
+          subscribeToRooms(socket);
+        } else {
+          handleAuthenticationFailure(socket, response);
+        }
+      });
+
+      // Function to send authentication data
+      const sendAuthData = () => {
+        if (!socket.connected) {
+          logger.warn("Cannot send auth data - socket not connected");
+          return;
+        }
+
+        socket.emit("authenticate", {
+          userId: user.id,
+          username: user.username,
+          timestamp: new Date().toISOString(),
+          attempt: authStateRef.current.attempts,
+          transport: socket.io?.engine?.transport?.name,
+        });
+      };
+
+      // Function to handle authentication failure
+      const handleAuthenticationFailure = (socket, response) => {
+        logger.error("Socket authentication rejected", {
+          error: response.error,
+          timestamp: response.timestamp,
+          attempts: authStateRef.current.attempts,
+          transport: socket.io?.engine?.transport?.name,
+        });
+
+        authStateRef.current.lastError = {
+          time: new Date().toISOString(),
+          error: response.error,
+        };
+        authStateRef.current.errors.push(authStateRef.current.lastError);
+
+        if (authStateRef.current.attempts < authStateRef.current.maxRetries) {
+          retryAuthentication(socket);
+        }
+      };
+
+      // Function to retry authentication
+      const retryAuthentication = (socket) => {
+        clearTimeouts();
+
+        authStateRef.current.retryTimeoutId = setTimeout(() => {
+          logger.info("Retrying socket authentication", {
+            attempt: authStateRef.current.attempts + 1,
+            maxRetries: authStateRef.current.maxRetries,
+            transport: socket.io?.engine?.transport?.name,
+          });
+
+          if (socket.connected) {
+            sendAuthData();
+          }
+        }, authStateRef.current.retryDelay);
+      };
+
+      // Function to handle room subscriptions
+      const subscribeToRooms = (socket) => {
+        socket.emit("subscribe", { rooms: ["general"] });
+
+        socket.off("subscribed").on("subscribed", (response) => {
+          if (response.success) {
+            logger.info("Successfully subscribed to rooms", {
+              rooms: response.rooms,
+              timestamp: response.timestamp,
+              transport: socket.io?.engine?.transport?.name,
+            });
+          } else {
+            logger.warn("Failed to subscribe to rooms", {
+              error: response.error,
+              transport: socket.io?.engine?.transport?.name,
+            });
+          }
+        });
+      };
+
+      // Initiate authentication
+      sendAuthData();
     },
     [user]
   );
 
   /**
-   * Resets the authentication state
-   * Useful when socket needs to be reconnected
+   * Resets the authentication state and cleans up timeouts
    */
   const resetAuthState = useCallback(() => {
     logger.info("Resetting socket authentication state");
+    clearTimeouts();
+
     authStateRef.current = {
+      ...authStateRef.current,
       authSent: false,
       authConfirmed: false,
       lastAuthTime: null,
       attempts: 0,
       errors: [],
+      lastError: null,
+      transportAtAuth: null,
+      authTimeoutId: null,
+      retryTimeoutId: null,
     };
-  }, []);
+  }, [clearTimeouts]);
 
   /**
    * Gets the current authentication state

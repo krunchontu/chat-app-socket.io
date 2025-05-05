@@ -14,19 +14,20 @@ const logger = createLogger("socketFactory");
  */
 export const createSocketConnection = (endpoint, token, user) => {
   const socketOptions = {
-    // Use websocket only to prevent transport issues
-    // Only fall back to polling if explicitly requested
-    transports: ["websocket"],
+    // Enable transport fallback for better connection reliability
+    transports: ["websocket", "polling"],
+    upgradeTimeout: 10000, // Time to wait for upgrade to websocket
+    rememberUpgrade: true, // Remember successful websocket upgrades
 
     // Authentication details
     auth: { token },
 
-    // Reconnection settings
+    // Optimized reconnection settings
     reconnection: true,
     reconnectionAttempts: Infinity, // Never stop trying to reconnect
-    reconnectionDelay: 500, // Start with a short delay
-    reconnectionDelayMax: 2000, // Don't increase delay beyond 2 seconds
-    timeout: 45000, // Increased timeout to match server
+    reconnectionDelay: 1000, // Initial delay of 1 second
+    reconnectionDelayMax: 5000, // Maximum delay of 5 seconds
+    timeout: 45000, // Connection timeout
 
     // Connection path & options
     path: "/socket.io/",
@@ -59,12 +60,31 @@ export const createSocketConnection = (endpoint, token, user) => {
     // Create socket with retries on failure
     const socket = socketIo(endpoint, socketOptions);
 
-    // Add instrumentation to detect bad connections early
+    // Enhanced connection monitoring
     socket.io.on("error", (error) => {
       logger.error("Socket manager error detected:", {
         message: error.message,
         type: error.type,
         code: error.code,
+        transport: socket.io.engine?.transport?.name,
+        upgrades: socket.io.engine?.upgrades || [],
+        readyState: socket.io.engine?.readyState,
+      });
+    });
+
+    // Monitor transport changes
+    socket.io.engine?.on("upgrade", (transport) => {
+      logger.info("Socket transport upgraded:", {
+        from: socket.io.engine.transport.name,
+        to: transport.name,
+      });
+    });
+
+    // Monitor failed upgrades
+    socket.io.engine?.on("upgradeError", (err) => {
+      logger.warn("Socket transport upgrade failed:", {
+        error: err.message,
+        transport: socket.io.engine?.transport?.name,
       });
     });
 
