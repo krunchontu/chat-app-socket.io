@@ -121,26 +121,26 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/release'
+    environment: production
     
     steps:
       - name: Deploy Backend to Render
-        uses: JorgeLNJunior/render-deploy@v1.4.3
-        with:
-          service_id: ${{ secrets.RENDER_BACKEND_SERVICE_ID }}
-          api_key: ${{ secrets.RENDER_API_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK_URL }}"
           
       - name: Deploy Frontend to Render
-        uses: JorgeLNJunior/render-deploy@v1.4.3
-        with:
-          service_id: ${{ secrets.RENDER_FRONTEND_SERVICE_ID }}
-          api_key: ${{ secrets.RENDER_API_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl "${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK_URL }}"
           
       - name: Check Backend Deployment
         run: |
           echo "Checking backend deployment..."
           curl --retry 5 --retry-delay 5 --retry-all-errors ${{ secrets.BACKEND_URL }}
+          
+      - name: Check Frontend Deployment
+        run: |
+          echo "Checking frontend deployment..."
+          curl --retry 5 --retry-delay 5 --retry-all-errors ${{ secrets.FRONTEND_URL }}
           
       - name: Notify Deployment Status
         if: always()
