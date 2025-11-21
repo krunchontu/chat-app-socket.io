@@ -2,6 +2,23 @@
  * Server-side validation middleware for various API inputs
  */
 
+/**
+ * Sanitize username to prevent XSS attacks
+ * Removes HTML tags, script tags, and dangerous characters
+ * Note: Does NOT truncate length - validation will handle that
+ */
+const sanitizeUsername = (username) => {
+  if (!username || typeof username !== 'string') {
+    return username;
+  }
+
+  return username
+    .trim()
+    .replace(/[<>\"'`]/g, '') // Remove HTML/script injection chars
+    .replace(/javascript:/gi, '') // Remove javascript: protocol
+    .replace(/on\w+=/gi, ''); // Remove event handlers (onclick=, onload=, etc)
+};
+
 // Message validation
 const validateMessage = (req, res, next) => {
   const { text } = req.body;
@@ -27,12 +44,13 @@ const validateRegistration = (req, res, next) => {
   let { username, password, email } = req.body;
   const errors = [];
 
-  // Username validation - trim whitespace first
+  // Username validation - sanitize and validate
   if (!username || !username.trim()) {
     errors.push("Username is required");
   } else {
-    username = username.trim(); // Trim whitespace
-    req.body.username = username; // Update request body
+    // SECURITY FIX (ISSUE-011): Sanitize username to prevent XSS
+    username = sanitizeUsername(username);
+    req.body.username = username; // Update request body with sanitized value
 
     if (username.length < 3 || username.length > 20) {
       errors.push("Username must be between 3 and 20 characters");
@@ -71,11 +89,15 @@ const validateRegistration = (req, res, next) => {
 
 // User login validation
 const validateLogin = (req, res, next) => {
-  const { username, password } = req.body;
+  let { username, password } = req.body;
   const errors = [];
 
   if (!username || !username.trim()) {
     errors.push("Username is required");
+  } else {
+    // SECURITY FIX (ISSUE-011): Sanitize username on login too
+    username = sanitizeUsername(username);
+    req.body.username = username;
   }
 
   if (!password) {

@@ -1,37 +1,21 @@
 import React from 'react';
 import { ErrorBoundary as ReactErrorBoundary } from 'react-error-boundary';
 import ErrorService, { ErrorCategory, ErrorSeverity } from '../../services/ErrorService';
+import ServerError from './ServerError'; // ISSUE-009: Use custom error page
 import './ErrorBoundary.css';
 
 /**
  * Default fallback component for displaying errors
- * 
+ * UPDATED (ISSUE-009): Now uses ServerError component for better UX
+ *
  * @param {Object} props - Properties passed from the ErrorBoundary
  * @param {Error} props.error - The error that was thrown
  * @param {Function} props.resetErrorBoundary - Function to reset the error boundary
  * @returns {JSX.Element} Fallback UI when an error occurs
  */
 const DefaultFallback = ({ error, resetErrorBoundary }) => {
-  // Get a user-friendly message for the error
-  const errorMessage = ErrorService.getUserFriendlyMessage({
-    category: ErrorCategory.UI,
-    message: error.message
-  });
-  
-  return (
-    <div role="alert" className="error-boundary-fallback">
-      <div className="error-icon" aria-hidden="true">⚠️</div>
-      <h3>Something went wrong</h3>
-      <p className="error-message">{errorMessage}</p>
-      <button 
-        onClick={resetErrorBoundary} 
-        className="error-reset-btn"
-        aria-label="Try again"
-      >
-        Try Again
-      </button>
-    </div>
-  );
+  // Use the new ServerError component for a better error experience
+  return <ServerError error={error} resetError={resetErrorBoundary} />;
 };
 
 /**

@@ -11,6 +11,10 @@ jest.mock("jsonwebtoken");
 jest.mock("../models/user", () => ({
   findById: jest.fn(),
 }));
+// ISSUE-010: Mock TokenBlacklist for session management tests
+jest.mock("../models/tokenBlacklist", () => ({
+  isBlacklisted: jest.fn().mockResolvedValue(false), // Default: tokens not blacklisted
+}));
 
 // Mock environment variables
 process.env.JWT_SECRET = "test_jwt_secret";

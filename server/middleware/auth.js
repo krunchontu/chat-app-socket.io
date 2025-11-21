@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
+const TokenBlacklist = require("../models/tokenBlacklist"); // ISSUE-010: Token invalidation
 const logger = require("../utils/logger");
 
 // Middleware to verify JWT token
@@ -19,6 +20,18 @@ const auth = async (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+    // SECURITY FIX (ISSUE-010): Check if token has been blacklisted
+    const isBlacklisted = await TokenBlacklist.isBlacklisted(token);
+    if (isBlacklisted) {
+      logger.auth.warn("Blacklisted token used", {
+        userId: decoded.id,
+        tokenPrefix: token.substring(0, 10) + "...",
+      });
+      return res.status(401).json({
+        message: "Token has been invalidated. Please login again.",
+      });
+    }
+
     // Find user with matching ID
     const user = await User.findById(decoded.id);
 
@@ -26,9 +39,10 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ message: "User not found" });
     }
 
-    // Attach user object to request
+    // Attach user object and token to request
     req.user = user;
     req.token = token;
+    req.tokenDecoded = decoded; // Also attach decoded token data
 
     next();
   } catch (error) {

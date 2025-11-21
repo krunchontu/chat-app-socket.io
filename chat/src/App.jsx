@@ -13,6 +13,7 @@ import Register from "./components/auth/Register";
 import Home from "./components/common/Home";
 import PrivateRoute from "./components/common/PrivateRoute";
 import SocketStatusBar from "./components/SocketStatusBar";
+import NotFound from "./components/common/NotFound"; // ISSUE-009: Custom 404 page
 
 /**
  * Main Application Component
@@ -111,8 +112,8 @@ function App() {
                         }
                       />
                       
-                      {/* Catch any unmatched routes */}
-                      <Route path="*" element={<Navigate to="/" replace />} />
+                      {/* Catch any unmatched routes - ISSUE-009: Show custom 404 page */}
+                      <Route path="*" element={<NotFound />} />
                     </Routes>
                   </div>
                 </ErrorBoundary>

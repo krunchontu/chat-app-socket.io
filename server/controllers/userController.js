@@ -176,6 +176,7 @@ const updateUserProfile = async (req, res) => {
 };
 
 // Log out user
+// UPDATED (ISSUE-010): Now blacklists JWT token for true logout
 const logoutUser = async (req, res) => {
   try {
     if (!req.user || !req.user.id) {
@@ -186,10 +187,20 @@ const logoutUser = async (req, res) => {
       return res.json({ message: "Logged out successfully" });
     }
     const userId = req.user.id;
+    const token = req.token; // Token attached by auth middleware
+    const tokenDecoded = req.tokenDecoded; // Decoded token data
+
     userLogger.info("Controller: Request to logout user", { userId });
 
-    // Delegate logic to UserService (fire and forget, don't wait)
-    UserService.logoutUser(userId).catch((err) => {
+    // SECURITY FIX (ISSUE-010): Blacklist the token
+    // Get metadata for audit trail
+    const metadata = {
+      userAgent: req.headers["user-agent"],
+      ipAddress: req.ip || req.connection.remoteAddress,
+    };
+
+    // Delegate logic to UserService (includes token blacklisting)
+    UserService.logoutUser(userId, token, tokenDecoded, metadata).catch((err) => {
       // Log error but don't let it fail the response
       userLogger.error("Controller: Background logout task failed", {
         userId,
