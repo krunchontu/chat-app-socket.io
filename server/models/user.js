@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const logger = require("../utils/logger");
 
 const userSchema = new mongoose.Schema(
   {
@@ -76,7 +77,10 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 userSchema.methods.generateAuthToken = function () {
   // Check for JWT secret and enforce its presence
   if (!process.env.JWT_SECRET) {
-    console.error("JWT_SECRET is not defined in environment variables");
+    logger.auth.error("JWT_SECRET is not defined in environment variables", {
+      userId: this._id,
+      username: this.username,
+    });
     throw new Error("Server configuration error: JWT_SECRET is missing");
   }
 
