@@ -16,7 +16,7 @@ const logger = createLogger("ChatProvider");
 const ChatContext = createContext();
 
 // For tracing all events during debugging
-const DEBUG_MESSAGE_TRACE_ENABLED = true;
+const DEBUG_MESSAGE_TRACE_ENABLED = process.env.NODE_ENV === 'development';
 
 export const ChatProvider = ({ children }) => {
   const { isAuthenticated, user } = useAuth();
