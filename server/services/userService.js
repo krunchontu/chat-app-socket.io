@@ -100,8 +100,21 @@ class UserService {
         throw new Error("Username must be between 3 and 20 characters");
       }
 
-      if (password.length < 6) {
-        throw new Error("Password must be at least 6 characters");
+      // ISSUE-003: Enhanced password validation aligned with frontend
+      if (password.length < 8) {
+        throw new Error("Password must be at least 8 characters");
+      }
+      if (!/[A-Z]/.test(password)) {
+        throw new Error("Password must include at least one uppercase letter");
+      }
+      if (!/[a-z]/.test(password)) {
+        throw new Error("Password must include at least one lowercase letter");
+      }
+      if (!/[0-9]/.test(password)) {
+        throw new Error("Password must include at least one number");
+      }
+      if (!/[^A-Za-z0-9]/.test(password)) {
+        throw new Error("Password must include at least one special character");
       }
 
       // Check MongoDB connection before continuing
@@ -203,14 +216,43 @@ class UserService {
         throw new Error("Invalid credentials"); // Generic message for security
       }
 
+      // ISSUE-007: Check if account is locked
+      if (user.isLocked()) {
+        const minutesRemaining = user.getLockTimeRemaining();
+        userLogger.warn("Service: Login failed - account locked", {
+          username,
+          minutesRemaining,
+        });
+        throw new Error(
+          `Account is locked due to multiple failed login attempts. Please try again in ${minutesRemaining} minute(s).`
+        );
+      }
+
       // Check if password is correct (method assumed on User model)
       const isMatch = await user.comparePassword(password);
       if (!isMatch) {
+        // Increment failed login attempts
+        await user.incrementLoginAttempts();
+
         userLogger.warn("Service: Login failed - password mismatch", {
           username,
+          failedAttempts: user.failedLoginAttempts + 1,
         });
+
+        // Check if account is now locked after this failed attempt
+        const updatedUser = await User.findOne({ username });
+        if (updatedUser && updatedUser.isLocked()) {
+          const minutesRemaining = updatedUser.getLockTimeRemaining();
+          throw new Error(
+            `Too many failed login attempts. Account locked for ${minutesRemaining} minute(s).`
+          );
+        }
+
         throw new Error("Invalid credentials"); // Generic message
       }
+
+      // ISSUE-007: Reset login attempts on successful login
+      await user.resetLoginAttempts();
 
       // Mark user as online with timeout
       user.isOnline = true;

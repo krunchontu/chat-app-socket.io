@@ -22,7 +22,7 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: true,
-      minlength: 6,
+      minlength: 8, // ISSUE-003: Increased from 6 to 8 characters
     },
     avatar: {
       type: String, // URL to avatar image
@@ -36,6 +36,15 @@ const userSchema = new mongoose.Schema(
     isOnline: {
       type: Boolean,
       default: false,
+    },
+    // ISSUE-007: Account lockout mechanism to prevent brute force attacks
+    failedLoginAttempts: {
+      type: Number,
+      default: 0,
+    },
+    lockUntil: {
+      type: Date,
+      default: null,
     },
   },
   {
@@ -83,6 +92,53 @@ userSchema.methods.generateAuthToken = function () {
     }
   );
   return token;
+};
+
+// ISSUE-007: Account lockout helper methods
+// Check if account is currently locked
+userSchema.methods.isLocked = function () {
+  // Check if lockUntil is set and still in the future
+  return !!(this.lockUntil && this.lockUntil > Date.now());
+};
+
+// Get remaining lock time in minutes
+userSchema.methods.getLockTimeRemaining = function () {
+  if (!this.lockUntil || this.lockUntil <= Date.now()) {
+    return 0;
+  }
+  return Math.ceil((this.lockUntil - Date.now()) / 60000); // Convert to minutes
+};
+
+// Increment failed login attempts and lock if threshold reached
+userSchema.methods.incrementLoginAttempts = async function () {
+  // If we have a previous lock that has expired, restart the attempts count
+  if (this.lockUntil && this.lockUntil < Date.now()) {
+    return this.updateOne({
+      $set: { failedLoginAttempts: 1 },
+      $unset: { lockUntil: 1 },
+    });
+  }
+
+  // Otherwise increment attempts
+  const updates = { $inc: { failedLoginAttempts: 1 } };
+
+  // Lock the account if we've reached the maximum attempts (5)
+  const maxAttempts = 5;
+  const lockTime = 15 * 60 * 1000; // 15 minutes in milliseconds
+
+  if (this.failedLoginAttempts + 1 >= maxAttempts && !this.isLocked()) {
+    updates.$set = { lockUntil: Date.now() + lockTime };
+  }
+
+  return this.updateOne(updates);
+};
+
+// Reset failed login attempts on successful login
+userSchema.methods.resetLoginAttempts = async function () {
+  return this.updateOne({
+    $set: { failedLoginAttempts: 0 },
+    $unset: { lockUntil: 1 },
+  });
 };
 
 // Create a virtual 'id' field that uses _id for consistency

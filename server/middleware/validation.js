@@ -24,23 +24,36 @@ const validateMessage = (req, res, next) => {
 
 // User registration validation
 const validateRegistration = (req, res, next) => {
-  const { username, password, email } = req.body;
+  let { username, password, email } = req.body;
   const errors = [];
 
-  // Username validation
+  // Username validation - trim whitespace first
   if (!username || !username.trim()) {
     errors.push("Username is required");
-  } else if (username.length < 3 || username.length > 20) {
-    errors.push("Username must be between 3 and 20 characters");
-  } else if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-    errors.push("Username can only contain letters, numbers, and underscores");
+  } else {
+    username = username.trim(); // Trim whitespace
+    req.body.username = username; // Update request body
+
+    if (username.length < 3 || username.length > 20) {
+      errors.push("Username must be between 3 and 20 characters");
+    } else if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      errors.push("Username can only contain letters, numbers, and underscores");
+    }
   }
 
-  // Password validation
+  // Password validation - ISSUE-003: Aligned with frontend requirements
   if (!password) {
     errors.push("Password is required");
-  } else if (password.length < 6) {
-    errors.push("Password must be at least 6 characters");
+  } else if (password.length < 8) {
+    errors.push("Password must be at least 8 characters");
+  } else if (!/[A-Z]/.test(password)) {
+    errors.push("Password must include at least one uppercase letter");
+  } else if (!/[a-z]/.test(password)) {
+    errors.push("Password must include at least one lowercase letter");
+  } else if (!/[0-9]/.test(password)) {
+    errors.push("Password must include at least one number");
+  } else if (!/[^A-Za-z0-9]/.test(password)) {
+    errors.push("Password must include at least one special character");
   }
 
   // Email validation (if provided)
