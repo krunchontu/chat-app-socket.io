@@ -115,27 +115,41 @@ const connectDB = async () => {
       name: error.name,
     });
 
-    // Use mock database in development instead of crashing
-    if (process.env.NODE_ENV !== "production") {
-      logger.warn("Using mock database fallback for development/testing");
+    // PRODUCTION: Fail fast - do NOT allow mock database fallback
+    if (process.env.NODE_ENV === "production") {
+      logger.error(
+        "CRITICAL: MongoDB connection failed in production environment. Server cannot start without database.",
+        {
+          error: error.message,
+          mongoUri: process.env.MONGO_URI ? "set" : "not set",
+          mongodbUri: process.env.MONGODB_URI ? "set" : "not set",
+        }
+      );
+      // Exit with error code to trigger container restart/alert
+      process.exit(1);
+    }
 
-      try {
-        // Setup mock database as fallback
-        const mockDB = setupMockModels();
-        return {
-          connection: {
-            host: "mock-db",
-            isMockDB: true,
-          },
-          ...mockDB,
-        };
-      } catch (mockError) {
-        logger.error("Failed to set up mock database:", mockError);
-        process.exit(1);
+    // DEVELOPMENT/TEST: Use mock database fallback
+    logger.warn(
+      "MongoDB connection failed in development/test environment. Using mock database fallback.",
+      {
+        environment: process.env.NODE_ENV || "development",
       }
-    } else {
-      // In production, handle the error more critically
-      throw error;
+    );
+
+    try {
+      // Setup mock database as fallback
+      const mockDB = setupMockModels();
+      return {
+        connection: {
+          host: "mock-db",
+          isMockDB: true,
+        },
+        ...mockDB,
+      };
+    } catch (mockError) {
+      logger.error("Failed to set up mock database:", mockError);
+      process.exit(1);
     }
   }
 };

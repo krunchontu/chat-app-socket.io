@@ -7,8 +7,10 @@ const { v4: uuidv4 } = require("uuid"); // Import uuid
 const connectDB = require("./config/db"); // Import database connection
 const messageRoutes = require("./routes/messageRoutes"); // Import message routes
 const userRoutes = require("./routes/userRoutes"); // Import user routes
+const healthRoutes = require("./routes/healthRoutes"); // Import health routes
 const socketAuth = require("./middleware/socketAuth"); // Import socket authentication middleware
 const { apiLimiter } = require("./middleware/rateLimiter"); // Import rate limiter
+const { socketRateLimiterMiddleware } = require("./middleware/socketRateLimiter"); // Import socket rate limiter
 const logger = require("./utils/logger"); // Import enhanced logging utilities
 const {
   createMessage,
@@ -29,10 +31,9 @@ try {
     .then((conn) => {
       if (conn && conn.connection && conn.connection.isMockDB) {
         logger.db.warn(
-          "Server running with mock database! This is a fallback mode."
-        );
-        console.log(
-          "\n⚠️ USING MOCK DATABASE - Some features will be limited ⚠️\n"
+          "Server running with mock database! This is a fallback mode.", {
+            warning: "USING MOCK DATABASE - Some features will be limited"
+          }
         );
       }
     })
@@ -100,7 +101,7 @@ app.options("*", cors(corsOptions));
 app.use(cors(corsOptions));
 
 // Log CORS configuration
-console.log("CORS configuration:", {
+logger.api.info("CORS configuration loaded", {
   allowedOrigins: process.env.CLIENT_ORIGIN
     ? process.env.CLIENT_ORIGIN.split(",")
     : [
@@ -117,6 +118,9 @@ app.use(express.json()); // Parse JSON bodies
 app.get("/", (req, res) => {
   res.send("Chat Server is running");
 });
+
+// Health check routes (no rate limiting for monitoring)
+app.use("/", healthRoutes);
 
 // API routes with rate limiting
 app.use("/api", apiLimiter); // Apply rate limiting to all API routes
@@ -143,17 +147,22 @@ const io = new Server(server, {
 });
 
 // Log the configured port
-console.log(
-  `Server configured to use port: ${port} (from .env: ${
-    process.env.PORT || "not set"
-  })`
-);
+logger.app.info("Server port configured", {
+  port,
+  envPort: process.env.PORT || "not set",
+});
 
 // Apply socket authentication middleware
 io.use(socketAuth);
 
+// Apply socket rate limiting middleware
+io.use(socketRateLimiterMiddleware);
+
+// Attach io instance to app for health checks
+app.set("io", io);
+
 // Log socket.io configuration
-console.log("Socket.IO configuration:", {
+logger.socket.info("Socket.IO configuration loaded", {
   cors: {
     allowedOrigins: process.env.CLIENT_ORIGIN
       ? process.env.CLIENT_ORIGIN.split(",")
@@ -203,6 +212,16 @@ io.on("connection", (socket) => {
   // Listen for new messages
   socket.on("message", async (newMessageData) => {
     try {
+      // Check rate limit
+      if (socket.checkRateLimit("message")) {
+        socket.emit("rateLimit", {
+          eventType: "message",
+          message: "Too many messages. Please slow down.",
+          retryAfter: 60,
+        });
+        return;
+      }
+
       const correlationId = newMessageData._meta?.correlationId || uuidv4();
       logger.socket.info("Message received from client", {
         socketId: socket.id,
@@ -339,15 +358,28 @@ io.on("connection", (socket) => {
   // Listen for like updates (backward compatibility for legacy clients)
   socket.on("like", async ({ id }) => {
     try {
+      // Check rate limit
+      if (socket.checkRateLimit("like")) {
+        socket.emit("rateLimit", {
+          eventType: "like",
+          message: "Too many like requests. Please slow down.",
+          retryAfter: 60,
+        });
+        return;
+      }
+
       // Basic validation: Ensure message id is provided
       if (id && socket.user && socket.user.id) {
         // Toggle like status in the database
         const updatedMessage = await toggleMessageLike(id, socket.user.id);
 
         if (updatedMessage) {
-          console.log(
-            `Like toggled for message ${id} by user ${socket.user.username}, new count: ${updatedMessage.likes}`
-          );
+          logger.socket.info("Like toggled", {
+            messageId: id,
+            userId: socket.user.id,
+            username: socket.user.username,
+            newLikeCount: updatedMessage.likes,
+          });
 
           // Broadcast the update to all clients
           io.emit("messageUpdated", {
@@ -357,17 +389,29 @@ io.on("connection", (socket) => {
             reactions: updatedMessage.reactions,
           });
         } else {
-          console.warn(`Message not found: ${id}`);
+          logger.socket.warn("Message not found for like", {
+            messageId: id,
+            userId: socket.user?.id,
+          });
           socket.emit("error", { message: "Message not found" });
         }
       } else {
-        console.warn(`Invalid 'like' event received or user not authenticated`);
+        logger.socket.warn("Invalid like event or user not authenticated", {
+          hasId: !!id,
+          hasUser: !!socket.user,
+          hasUserId: !!socket.user?.id,
+        });
         socket.emit("error", {
           message: "Invalid like data or not authenticated",
         });
       }
     } catch (error) {
-      console.error("Error updating likes:", error);
+      logger.socket.error("Error updating likes", {
+        messageId: id,
+        userId: socket.user?.id,
+        error: error.message,
+        stack: error.stack,
+      });
       socket.emit("error", { message: "Failed to update likes" });
     }
   });
@@ -375,6 +419,16 @@ io.on("connection", (socket) => {
   // Listen for reaction updates (new system for all emoji reactions)
   socket.on("reaction", async ({ id, emoji }) => {
     try {
+      // Check rate limit
+      if (socket.checkRateLimit("reaction")) {
+        socket.emit("rateLimit", {
+          eventType: "reaction",
+          message: "Too many reaction requests. Please slow down.",
+          retryAfter: 60,
+        });
+        return;
+      }
+
       // Basic validation
       if (!id || !emoji || !socket.user || !socket.user.id) {
         socket.emit("error", {
@@ -387,9 +441,12 @@ io.on("connection", (socket) => {
       const updatedMessage = await toggleReaction(id, socket.user.id, emoji);
 
       if (updatedMessage) {
-        console.log(
-          `${emoji} reaction toggled for message ${id} by user ${socket.user.username}`
-        );
+        logger.socket.info("Reaction toggled", {
+          messageId: id,
+          userId: socket.user.id,
+          username: socket.user.username,
+          emoji,
+        });
 
         // Broadcast the update to all clients
         io.emit("messageUpdated", {
@@ -402,7 +459,13 @@ io.on("connection", (socket) => {
         socket.emit("error", { message: "Message not found" });
       }
     } catch (error) {
-      console.error(`Error handling reaction: ${error.message}`);
+      logger.socket.error("Error handling reaction", {
+        messageId: id,
+        userId: socket.user?.id,
+        emoji,
+        error: error.message,
+        stack: error.stack,
+      });
       socket.emit("error", { message: "Failed to update reaction" });
     }
   });
@@ -410,6 +473,16 @@ io.on("connection", (socket) => {
   // Listen for message edit requests
   socket.on("editMessage", async ({ id, text }) => {
     try {
+      // Check rate limit
+      if (socket.checkRateLimit("editMessage")) {
+        socket.emit("rateLimit", {
+          eventType: "editMessage",
+          message: "Too many edit requests. Please slow down.",
+          retryAfter: 60,
+        });
+        return;
+      }
+
       // Basic validation
       if (!id || !text || typeof text !== "string" || !text.trim()) {
         socket.emit("error", { message: "Message ID and text are required" });
@@ -428,7 +501,11 @@ io.on("connection", (socket) => {
       const updatedMessage = await editMessage(id, socket.user.id, text.trim());
 
       if (updatedMessage) {
-        console.log(`Message ${id} edited by user ${socket.user.username}`);
+        logger.socket.info("Message edited", {
+          messageId: id,
+          userId: socket.user.id,
+          username: socket.user.username,
+        });
 
         // Broadcast the updated message to all clients
         io.emit("messageEdited", updatedMessage);
@@ -436,7 +513,12 @@ io.on("connection", (socket) => {
         socket.emit("error", { message: "Failed to edit message" });
       }
     } catch (error) {
-      console.error(`Error editing message: ${error.message}`);
+      logger.socket.error("Error editing message", {
+        messageId: id,
+        userId: socket.user?.id,
+        error: error.message,
+        stack: error.stack,
+      });
       socket.emit("error", {
         message: error.message || "Failed to edit message",
       });
@@ -446,7 +528,21 @@ io.on("connection", (socket) => {
   // Listen for message delete requests
   socket.on("deleteMessage", async (data) => {
     try {
-      console.log("Received deleteMessage request:", data);
+      // Check rate limit
+      if (socket.checkRateLimit("deleteMessage")) {
+        socket.emit("rateLimit", {
+          eventType: "deleteMessage",
+          message: "Too many delete requests. Please slow down.",
+          retryAfter: 60,
+        });
+        return;
+      }
+
+      logger.socket.info("Delete message request received", {
+        data,
+        userId: socket.user?.id,
+        username: socket.user?.username,
+      });
 
       // Extract message ID from payload
       const { id } = data;
@@ -457,17 +553,15 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // Log authenticated user information
-      console.log("User attempting delete:", {
-        id: socket.user.id,
-        username: socket.user.username,
-      });
-
       // Delete message in database (soft delete)
       const deletedMessage = await deleteMessage(id, socket.user.id);
 
       if (deletedMessage) {
-        console.log(`Message ${id} deleted by user ${socket.user.username}`);
+        logger.socket.info("Message deleted", {
+          messageId: id,
+          userId: socket.user.id,
+          username: socket.user.username,
+        });
 
         // Broadcast the deletion to all clients
         io.emit("messageDeleted", { id });
@@ -475,7 +569,12 @@ io.on("connection", (socket) => {
         socket.emit("error", { message: "Failed to delete message" });
       }
     } catch (error) {
-      console.error(`Error deleting message: ${error.message}`);
+      logger.socket.error("Error deleting message", {
+        messageId: id,
+        userId: socket.user?.id,
+        error: error.message,
+        stack: error.stack,
+      });
       socket.emit("error", {
         message: error.message || "Failed to delete message",
       });
@@ -485,6 +584,16 @@ io.on("connection", (socket) => {
   // Listen for message replies
   socket.on("replyToMessage", async ({ parentId, text }) => {
     try {
+      // Check rate limit
+      if (socket.checkRateLimit("replyToMessage")) {
+        socket.emit("rateLimit", {
+          eventType: "replyToMessage",
+          message: "Too many reply requests. Please slow down.",
+          retryAfter: 60,
+        });
+        return;
+      }
+
       // Validate required fields
       if (!parentId || !text || typeof text !== "string" || !text.trim()) {
         socket.emit("error", {
@@ -516,7 +625,12 @@ io.on("connection", (socket) => {
       const savedReply = await replyToMessage(messageData, parentId);
 
       if (savedReply) {
-        console.log(`Reply to message ${parentId} sent by ${userName}`);
+        logger.socket.info("Reply created", {
+          parentId,
+          replyId: savedReply._id,
+          userId: socket.user.id,
+          username: userName,
+        });
 
         // Broadcast the new reply to all clients
         io.emit("replyCreated", savedReply);
@@ -524,7 +638,12 @@ io.on("connection", (socket) => {
         socket.emit("error", { message: "Failed to create reply" });
       }
     } catch (error) {
-      console.error(`Error creating reply: ${error.message}`);
+      logger.socket.error("Error creating reply", {
+        parentId,
+        userId: socket.user?.id,
+        error: error.message,
+        stack: error.stack,
+      });
       socket.emit("error", {
         message: error.message || "Failed to create reply",
       });
@@ -584,9 +703,6 @@ io.on("connection", (socket) => {
 });
 
 server.listen(port, () => {
-  console.log(`\n----- SERVER STARTED -----`);
-  console.log(`Server is running on port: ${port}`);
-
   // Use environment-specific hostname
   const isProduction = process.env.NODE_ENV === "production";
   const hostname = isProduction
@@ -596,22 +712,19 @@ server.listen(port, () => {
   const wsProtocol = isProduction ? "wss" : "ws";
   const httpProtocol = isProduction ? "https" : "http";
 
-  console.log(
-    `Socket.IO is available at: ${wsProtocol}://${hostname}${
-      isProduction ? "" : `:${port}`
-    }/socket.io/`
-  );
-  console.log(
-    `HTTP API is available at: ${httpProtocol}://${hostname}${
-      isProduction ? "" : `:${port}`
-    }/api/`
-  );
-  console.log(`---------------------------\n`);
+  const socketIOUrl = `${wsProtocol}://${hostname}${
+    isProduction ? "" : `:${port}`
+  }/socket.io/`;
+  const httpApiUrl = `${httpProtocol}://${hostname}${
+    isProduction ? "" : `:${port}`
+  }/api/`;
 
-  logger.app.info(`Server started successfully`, {
+  logger.app.info("Server started successfully", {
     port,
     environment: process.env.NODE_ENV || "development",
     hostname,
+    socketIOUrl,
+    httpApiUrl,
     time: new Date().toISOString(),
   });
 });

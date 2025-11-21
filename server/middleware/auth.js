@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
+const logger = require("../utils/logger");
 
 // Middleware to verify JWT token
 const auth = async (req, res, next) => {
@@ -12,7 +13,7 @@ const auth = async (req, res, next) => {
 
     // Verify token
     if (!process.env.JWT_SECRET) {
-      console.error("JWT_SECRET is not defined in environment variables");
+      logger.auth.error("JWT_SECRET is not defined in environment variables");
       return res.status(500).json({ message: "Server configuration error" });
     }
 
@@ -31,7 +32,10 @@ const auth = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error("Auth middleware error:", error);
+    logger.auth.error("Auth middleware error", {
+      error: error.message,
+      stack: error.stack,
+    });
     res.status(401).json({ message: "Authentication failed" });
   }
 };

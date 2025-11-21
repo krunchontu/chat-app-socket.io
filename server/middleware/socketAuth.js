@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
+const logger = require("../utils/logger");
 
 /**
  * Checks if a JWT token is about to expire
@@ -26,58 +27,86 @@ const isTokenNearExpiration = (decoded, thresholdMinutes = 10) => {
  */
 const socketAuth = async (socket, next) => {
   try {
-    console.log("Socket auth attempt for socket ID:", socket.id);
+    logger.auth.debug("Socket authentication attempt", {
+      socketId: socket.id,
+    });
 
     // Get token from handshake auth
     const token = socket.handshake.auth.token;
 
     if (!token) {
-      console.log("Socket auth failed: No token provided");
+      logger.auth.warn("Socket auth failed: No token provided", {
+        socketId: socket.id,
+      });
       return next(new Error("Authentication token required"));
     }
 
     // Check token format
     if (typeof token !== "string" || !token.trim()) {
-      console.log("Socket auth failed: Invalid token format");
+      logger.auth.warn("Socket auth failed: Invalid token format", {
+        socketId: socket.id,
+      });
       return next(new Error("Invalid authentication token format"));
     }
 
     // Verify token
     if (!process.env.JWT_SECRET) {
-      console.error("JWT_SECRET is not defined in environment variables");
+      logger.auth.error("JWT_SECRET is not defined in environment variables", {
+        socketId: socket.id,
+      });
       return next(new Error("Server configuration error"));
     }
 
-    console.log("Token received, attempting to verify");
+    logger.auth.debug("Token received, attempting to verify", {
+      socketId: socket.id,
+    });
 
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
-      console.log("Token verified successfully for user ID:", decoded.id);
+      logger.auth.info("Token verified successfully", {
+        socketId: socket.id,
+        userId: decoded.id,
+      });
 
       // Check if token is close to expiration
       if (isTokenNearExpiration(decoded)) {
-        console.log(`Token for user ${decoded.id} is close to expiration`);
+        logger.auth.warn("Token is close to expiration", {
+          socketId: socket.id,
+          userId: decoded.id,
+        });
         socket.tokenNearExpiry = true; // Flag for potential refresh
       }
     } catch (jwtError) {
       if (jwtError.name === "TokenExpiredError") {
-        console.log("Socket auth failed: Token expired");
+        logger.auth.warn("Socket auth failed: Token expired", {
+          socketId: socket.id,
+          error: jwtError.message,
+        });
         return next(
           new Error("Authentication token expired, please log in again")
         );
       } else if (jwtError.name === "JsonWebTokenError") {
-        console.log("Socket auth failed: Invalid token:", jwtError.message);
+        logger.auth.warn("Socket auth failed: Invalid token", {
+          socketId: socket.id,
+          error: jwtError.message,
+        });
         return next(new Error("Invalid authentication token"));
       } else {
-        console.log("Socket auth failed: JWT error:", jwtError.message);
+        logger.auth.error("Socket auth failed: JWT error", {
+          socketId: socket.id,
+          error: jwtError.message,
+          stack: jwtError.stack,
+        });
         throw jwtError; // Re-throw unexpected errors
       }
     }
 
     // Check if user ID exists in decoded token
     if (!decoded.id) {
-      console.log("Socket auth failed: No user ID in token");
+      logger.auth.warn("Socket auth failed: No user ID in token", {
+        socketId: socket.id,
+      });
       return next(new Error("Invalid token: missing user identification"));
     }
 
@@ -85,7 +114,10 @@ const socketAuth = async (socket, next) => {
     const user = await User.findById(decoded.id);
 
     if (!user) {
-      console.log("Socket auth failed: User not found for ID:", decoded.id);
+      logger.auth.warn("Socket auth failed: User not found", {
+        socketId: socket.id,
+        userId: decoded.id,
+      });
       return next(new Error("User not found"));
     }
 
@@ -94,7 +126,11 @@ const socketAuth = async (socket, next) => {
       user.status &&
       (user.status === "disabled" || user.status === "banned")
     ) {
-      console.log("Socket auth failed: User account disabled:", decoded.id);
+      logger.auth.warn("Socket auth failed: User account disabled", {
+        socketId: socket.id,
+        userId: decoded.id,
+        status: user.status,
+      });
       return next(new Error("Your account has been disabled"));
     }
 
@@ -105,23 +141,29 @@ const socketAuth = async (socket, next) => {
       role: user.role,
     };
 
-    console.log("User authenticated successfully:", {
-      username: user.username,
+    logger.auth.info("User authenticated successfully", {
       socketId: socket.id,
+      userId: user.id,
+      username: user.username,
+      role: user.role,
     });
 
     // Mark user as online when socket connects
     user.isOnline = true;
     await user.save();
 
-    console.log("User marked as online and saved to database");
+    logger.auth.debug("User marked as online", {
+      socketId: socket.id,
+      userId: user.id,
+      username: user.username,
+    });
     next();
   } catch (error) {
-    console.error("Socket authentication error:", error);
-    console.log("Error details:", {
-      name: error.name,
-      message: error.message,
-      stack: error.stack?.substring(0, 150), // Just include the first part of the stack for brevity
+    logger.auth.error("Socket authentication error", {
+      socketId: socket.id,
+      errorName: error.name,
+      error: error.message,
+      stack: error.stack,
     });
     next(new Error(`Authentication failed: ${error.message}`));
   }
