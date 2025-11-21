@@ -9,13 +9,13 @@
 
 | Category | Critical | High | Medium | Low | Total | Resolved |
 |----------|----------|------|--------|-----|-------|----------|
-| **Security** | 0 (was 3) | 0 (was 2) | 3 | 3 | 11 | **5** ✅ |
+| **Security** | 0 (was 3) | 0 (was 4) | 2 (was 3) | 3 | 11 | **7** ✅ |
 | **Bugs** | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Features** | 0 | 4 (was 5) | 8 | 10 | 23 | **1** ✅ |
+| **Features** | 0 | 3 (was 5) | 8 | 10 | 23 | **2** ✅ |
 | **Tech Debt** | 1 | 0 (was 2) | 4 | 3 | 10 | **2** ✅ |
-| **TOTAL** | **1** | **4** | **15** | **16** | **44** | **7** ✅ |
+| **TOTAL** | **1** | **3** | **14** | **16** | **44** | **11** ✅ |
 
-**Day 2/3 Progress:** 4 HIGH priority issues + 3 critical issues resolved! 🚀
+**Day 1 Progress:** 4 HIGH priority issues + 7 security issues resolved! 🚀🚀🚀
 
 ---
 
@@ -446,9 +446,10 @@ Add `/health` endpoint that:
 ### ISSUE-009: Missing Error Pages (404, 500)
 - **Category:** Feature
 - **Priority:** 🔴 HIGH
-- **Status:** 🔴 Open
-- **Assigned:** TBD
+- **Status:** 🟢 Resolved
+- **Assigned:** Development Team
 - **Created:** Nov 21, 2025
+- **Resolved:** Nov 21, 2025 (Day 1)
 - **Due:** Nov 24, 2025 (Day 4)
 
 **Description:**
@@ -473,6 +474,25 @@ Create:
 2. Verify custom 404 page shown
 3. Trigger error, verify ErrorBoundary shows custom page
 
+**Resolution:**
+- ✅ Created `chat/src/components/common/NotFound.jsx` (404 page)
+  - Professional design with dark mode support
+  - Helpful navigation links (Home, Chat, Login, Register)
+  - Suggestions for next steps
+- ✅ Created `chat/src/components/common/ServerError.jsx` (500 page)
+  - Error details shown in development only
+  - Reload and reset error buttons
+  - User-friendly troubleshooting tips
+  - Accepts error and resetError props
+- ✅ Updated `chat/src/components/common/ErrorBoundary.jsx`
+  - Now uses ServerError component for fallback
+  - Better error experience for users
+- ✅ Updated `chat/src/App.jsx`
+  - Changed catch-all route from redirect to NotFound component
+  - Route: `<Route path="*" element={<NotFound />} />`
+- All components support dark/light theme
+- Responsive design for mobile/tablet/desktop
+
 **Related Issues:** None
 **Blockers:** None
 
@@ -481,9 +501,10 @@ Create:
 ### ISSUE-010: No Session Management / Token Invalidation
 - **Category:** Security
 - **Priority:** 🔴 HIGH
-- **Status:** 🔴 Open
-- **Assigned:** TBD
+- **Status:** 🟢 Resolved
+- **Assigned:** Development Team
 - **Created:** Nov 21, 2025
+- **Resolved:** Nov 21, 2025 (Day 1)
 - **Due:** Nov 24, 2025 (Day 4)
 
 **Description:**
@@ -508,6 +529,34 @@ Implement token blacklist:
 2. Logout
 3. Use old token, verify rejected
 
+**Resolution:**
+- ✅ Created `server/models/tokenBlacklist.js` (MongoDB-based blacklist)
+  - Schema with token, userId, expiresAt, reason, metadata
+  - MongoDB TTL index for automatic cleanup (expires after token expiration)
+  - Static methods: blacklistToken(), isBlacklisted(), cleanupExpired()
+  - Audit trail: userAgent, ipAddress, blacklisted timestamp, reason
+- ✅ Updated `server/middleware/auth.js`
+  - Checks TokenBlacklist.isBlacklisted(token) after JWT verification
+  - Returns 401 with "Token has been invalidated" message if blacklisted
+  - Attaches tokenDecoded to req for logout use
+- ✅ Updated `server/middleware/socketAuth.js`
+  - Checks TokenBlacklist.isBlacklisted(token) for Socket.IO connections
+  - Prevents blacklisted tokens from establishing socket connections
+  - Logs security events for monitoring
+- ✅ Updated `server/controllers/userController.js` (logout)
+  - Now accepts token, tokenDecoded, and metadata
+  - Passes token info to UserService for blacklisting
+  - Collects userAgent and ipAddress for audit trail
+- ✅ Updated `server/services/userService.js` (logoutUser)
+  - Blacklists token on logout with expiration date
+  - Marks user as offline
+  - Comprehensive error handling
+- ✅ Updated `server/middleware/socketAuth.test.js`
+  - Added TokenBlacklist mock for tests
+  - All 44 tests passing
+- Tokens automatically removed from blacklist after natural expiration
+- True session invalidation on logout - tokens cannot be reused
+
 **Related Issues:** ISSUE-002
 **Blockers:** None
 
@@ -516,9 +565,10 @@ Implement token blacklist:
 ### ISSUE-011: No Input Sanitization on Username
 - **Category:** Security
 - **Priority:** 🔴 HIGH
-- **Status:** 🔴 Open
-- **Assigned:** TBD
+- **Status:** 🟢 Resolved
+- **Assigned:** Development Team
 - **Created:** Nov 21, 2025
+- **Resolved:** Nov 21, 2025 (Day 1)
 - **Due:** Nov 24, 2025 (Day 4)
 
 **Description:**
@@ -547,7 +597,27 @@ const sanitizeUsername = (username) => {
 2. Verify special chars removed
 3. Check username in UI (no script executed)
 
-**Related Issues:** None
+**Resolution:**
+- ✅ Created `sanitizeUsername()` function in `server/middleware/validation.js:5-20`
+  - Removes HTML/script injection characters: `<`, `>`, `"`, `'`, `` ` ``
+  - Removes `javascript:` protocol
+  - Removes event handlers: `onclick=`, `onload=`, etc. (regex: `/on\w+=/gi`)
+  - Does NOT truncate length (validation handles that separately)
+  - Returns original value if not a string or null/undefined
+- ✅ Applied sanitization in `validateRegistration()` middleware
+  - Sanitizes username before length and character validation
+  - Updates `req.body.username` with sanitized value
+  - Line 52: `username = sanitizeUsername(username);`
+- ✅ Applied sanitization in `validateLogin()` middleware
+  - Sanitizes username on login too (prevents injection at login time)
+  - Line 99: `username = sanitizeUsername(username);`
+- ✅ All 44 backend tests passing
+  - Validation tests verify username length enforcement still works
+  - Special character rejection still works correctly
+- XSS attack vector eliminated for username field
+- Backward compatible: existing usernames unaffected
+
+**Related Issues:** ISSUE-020 (MongoDB injection protection)
 **Blockers:** None
 
 ---
@@ -808,9 +878,10 @@ No analysis of bundle size or code splitting. May be loading unused code.
 ### ISSUE-020: No MongoDB Injection Protection
 - **Category:** Security
 - **Priority:** 🟡 MEDIUM
-- **Status:** 🔴 Open
-- **Assigned:** TBD
+- **Status:** 🟢 Resolved
+- **Assigned:** Development Team
 - **Created:** Nov 21, 2025
+- **Resolved:** Nov 21, 2025 (Day 1)
 - **Due:** Dec 2, 2025 (Day 12)
 
 **Description:**
@@ -835,7 +906,38 @@ app.use(mongoSanitize());
 2. Verify sanitized
 3. Test normal queries still work
 
-**Related Issues:** None
+**Resolution:**
+- ✅ Installed `express-mongo-sanitize` v2.2.0
+  - Added to `server/package.json` dependencies
+  - Installed with `npm install express-mongo-sanitize --save`
+- ✅ Updated `server/index.js:4`
+  - Added import: `const mongoSanitize = require("express-mongo-sanitize");`
+  - Added global middleware after `express.json()` (lines 118-130)
+  - Configuration:
+    ```javascript
+    app.use(mongoSanitize({
+      replaceWith: '_',  // Replace prohibited chars with underscore
+      onSanitize: ({ req, key }) => {
+        logger.api.warn("Potential NoSQL injection attempt detected", {
+          path: req.path,
+          method: req.method,
+          sanitizedKey: key,
+          ip: req.ip
+        });
+      }
+    }));
+    ```
+- ✅ Sanitizes all user input globally
+  - Removes/replaces MongoDB operators: `$`, `.` and others
+  - Protects against NoSQL injection attacks like `{ "$gt": "" }`
+  - Logs potential injection attempts for security monitoring
+- ✅ All 44 backend tests passing
+  - Normal queries work correctly
+  - No breaking changes
+- NoSQL injection attack vector eliminated
+- Comprehensive protection across all API endpoints
+
+**Related Issues:** ISSUE-011 (Username sanitization)
 **Blockers:** None
 
 ---
