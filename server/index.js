@@ -60,24 +60,21 @@ const corsOptions = {
           "chat-app-frontend-hgqg.onrender.com",
         ];
 
-    // Always add the current origin to allowed origins if it's not already in the list
-    if (
-      origin &&
-      !allowedOrigins.includes(origin) &&
-      !allowedOrigins.includes("*")
-    ) {
-      console.log(`Adding current origin to allowed origins: ${origin}`);
-      allowedOrigins.push(origin);
-    }
+    // Strict CORS: Only allow explicitly whitelisted origins
+    // SECURITY: DO NOT dynamically add origins - this defeats CORS protection
+    // ISSUE-002: Removed dangerous auto-addition of origins
 
-    // Allow requests with no origin (like mobile apps, curl, etc)
+    // Allow requests with no origin (like mobile apps, curl, Postman, etc)
     if (!origin) return callback(null, true);
 
     if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes("*")) {
+      logger.api.info("CORS: Allowed request from origin", { origin });
       callback(null, true);
     } else {
-      console.log(`CORS blocked request from origin: ${origin}`);
-      console.log(`Allowed origins are: ${allowedOrigins.join(", ")}`);
+      logger.api.warn("CORS: Blocked request from unauthorized origin", {
+        origin,
+        allowedOrigins: allowedOrigins.join(", ")
+      });
       callback(new Error(`Origin ${origin} not allowed by CORS`));
     }
   },

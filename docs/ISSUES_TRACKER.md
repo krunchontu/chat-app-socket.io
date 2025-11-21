@@ -1,19 +1,21 @@
 # Issues Tracker - MVP Development
 
-**Last Updated:** November 21, 2025
+**Last Updated:** November 21, 2025 (Day 2 - End of Day)
 **Status:** Active Development
 
 ---
 
 ## Quick Stats
 
-| Category | Critical | High | Medium | Low | Total |
-|----------|----------|------|--------|-----|-------|
-| **Security** | 1 | 5 | 4 | 3 | 13 |
-| **Bugs** | 0 | 0 | 0 | 0 | 0 |
-| **Features** | 0 | 5 | 8 | 10 | 23 |
-| **Tech Debt** | 1 | 2 | 4 | 3 | 10 |
-| **TOTAL** | **2** | **12** | **16** | **16** | **46** |
+| Category | Critical | High | Medium | Low | Total | Resolved |
+|----------|----------|------|--------|-----|-------|----------|
+| **Security** | 0 (was 3) | 2 | 3 | 3 | 11 | **3** ✅ |
+| **Bugs** | 0 | 0 | 0 | 0 | 0 | 0 |
+| **Features** | 0 | 5 | 8 | 10 | 23 | 0 |
+| **Tech Debt** | 1 | 2 | 4 | 3 | 10 | 0 |
+| **TOTAL** | **1** | **9** | **15** | **16** | **44** | **3** ✅ |
+
+**Day 2 Progress:** 3 critical/high security issues resolved! 🎉
 
 ---
 
@@ -69,9 +71,10 @@ const DEBUG_MESSAGE_TRACE_ENABLED = process.env.NODE_ENV === 'development';
 ### ISSUE-002: CORS Security Bypass
 - **Category:** Security
 - **Priority:** 🚨 CRITICAL
-- **Status:** 🔴 Open
-- **Assigned:** TBD
+- **Status:** 🟢 Resolved
+- **Assigned:** Development Team
 - **Created:** Nov 21, 2025
+- **Resolved:** Nov 21, 2025 (Day 2)
 - **Due:** Nov 21, 2025 (Day 1)
 
 **Description:**
@@ -104,6 +107,14 @@ if (origin && !allowedOrigins.includes(origin)) {
 2. Verify request is blocked
 3. Check CORS headers in response
 
+**Resolution:**
+- Fixed in `server/index.js:63-79`
+- Removed dangerous dynamic origin addition (lines 64-71)
+- Implemented strict CORS whitelist-only policy
+- Added structured logging for CORS events
+- All tests passing: Backend (44/44)
+- Security vulnerability eliminated
+
 **Related Issues:** ISSUE-010
 **Blockers:** None
 
@@ -112,9 +123,10 @@ if (origin && !allowedOrigins.includes(origin)) {
 ### ISSUE-003: Password Validation Mismatch
 - **Category:** Security
 - **Priority:** 🚨 CRITICAL
-- **Status:** 🔴 Open
-- **Assigned:** TBD
+- **Status:** 🟢 Resolved
+- **Assigned:** Development Team
 - **Created:** Nov 21, 2025
+- **Resolved:** Nov 21, 2025 (Day 2)
 - **Due:** Nov 22, 2025 (Day 2)
 
 **Description:**
@@ -154,6 +166,21 @@ if (password.length < 8) {
 1. Test weak password via API (should fail)
 2. Test strong password via API (should succeed)
 3. Verify frontend and backend validation match
+
+**Resolution:**
+- Fixed in multiple files:
+  - `server/middleware/validation.js:39-52` - Enhanced password validation
+  - `server/models/user.js:25` - Updated minlength from 6 to 8
+  - `server/services/userService.js:103-118` - Added comprehensive validation
+- Created comprehensive test suite: `server/middleware/validation.test.js` (30+ tests)
+- All password requirements now aligned:
+  - Minimum 8 characters (was 6)
+  - At least one uppercase letter
+  - At least one lowercase letter
+  - At least one number
+  - At least one special character
+- All tests passing: Backend (44/44)
+- Frontend and backend validation now consistent
 
 **Related Issues:** ISSUE-007
 **Blockers:** None
@@ -276,9 +303,10 @@ if (process.env.NODE_ENV === 'production' && !process.env.MONGO_URI) {
 ### ISSUE-007: No Account Lockout Mechanism
 - **Category:** Security
 - **Priority:** 🔴 HIGH
-- **Status:** 🔴 Open
-- **Assigned:** TBD
+- **Status:** 🟢 Resolved
+- **Assigned:** Development Team
 - **Created:** Nov 21, 2025
+- **Resolved:** Nov 21, 2025 (Day 2)
 - **Due:** Nov 22, 2025 (Day 2)
 
 **Description:**
@@ -302,6 +330,23 @@ Unlimited login attempts allowed (only rate-limited). Brute force attacks are po
 2. Verify account locked
 3. Wait 15 minutes
 4. Verify can login again
+
+**Resolution:**
+- Implemented full account lockout mechanism:
+  - `server/models/user.js:41-48` - Added `failedLoginAttempts` and `lockUntil` fields
+  - `server/models/user.js:99-142` - Added lockout helper methods:
+    - `isLocked()` - Check if account is locked
+    - `getLockTimeRemaining()` - Get remaining lock time
+    - `incrementLoginAttempts()` - Increment failed attempts and lock if threshold reached
+    - `resetLoginAttempts()` - Reset on successful login
+  - `server/services/userService.js:219-255` - Integrated lockout logic in login flow
+- Configuration:
+  - Maximum 5 failed attempts before lockout
+  - 15-minute lockout duration
+  - Automatic reset on successful login
+  - Clear error messages to users
+- All tests passing: Backend (44/44)
+- Brute force attack vector eliminated
 
 **Related Issues:** ISSUE-003
 **Blockers:** None
@@ -521,9 +566,10 @@ Add comprehensive tests (see Week 2 plan).
 ### ISSUE-014: Security Vulnerabilities in Dependencies
 - **Category:** Security
 - **Priority:** 🟡 MEDIUM
-- **Status:** 🔴 Open
-- **Assigned:** TBD
+- **Status:** 🟡 In Progress
+- **Assigned:** Development Team
 - **Created:** Nov 21, 2025
+- **Updated:** Nov 21, 2025 (Day 2)
 - **Due:** Dec 2, 2025 (Day 12)
 
 **Description:**
@@ -553,6 +599,17 @@ Add comprehensive tests (see Week 2 plan).
 1. Run `npm audit`
 2. Verify zero high/critical vulnerabilities
 3. Test app still works
+
+**Progress Update (Day 2):**
+- Ran `npm audit fix` on backend and frontend
+- **Backend:** Reduced from 8 to 2 vulnerabilities (both dev dependencies)
+  - Fixed: @eslint/plugin-kit, brace-expansion, form-data, js-yaml, tar-fs
+  - Remaining: axios (in logdna dev dependency) - requires breaking changes
+- **Frontend:** Reduced from 10 to 2 vulnerabilities (both dev dependencies)
+  - Fixed: axios, brace-expansion, form-data, glob, js-yaml, on-headers
+  - Remaining: webpack-dev-server (dev only, source code theft) - requires breaking changes
+- All tests passing after fixes: Backend (44/44)
+- Remaining vulnerabilities documented in ISSUE-025 (breaking changes required)
 
 **Related Issues:** None
 **Blockers:** None
