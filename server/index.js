@@ -1,6 +1,7 @@
 const http = require("http");
 const express = require("express");
 const cors = require("cors");
+const mongoSanitize = require("express-mongo-sanitize"); // SECURITY: NoSQL injection protection
 require("dotenv").config(); // Load environment variables from .env file
 const { Server } = require("socket.io"); // Updated import
 const { v4: uuidv4 } = require("uuid"); // Import uuid
@@ -113,6 +114,20 @@ logger.api.info("CORS configuration loaded", {
   credentials: corsOptions.credentials,
 });
 app.use(express.json()); // Parse JSON bodies
+
+// SECURITY FIX (ISSUE-020): MongoDB injection protection
+// Sanitize user input to prevent NoSQL injection attacks
+app.use(mongoSanitize({
+  replaceWith: '_', // Replace prohibited characters with underscore
+  onSanitize: ({ req, key }) => {
+    logger.api.warn("Potential NoSQL injection attempt detected and sanitized", {
+      path: req.path,
+      method: req.method,
+      sanitizedKey: key,
+      ip: req.ip
+    });
+  }
+}));
 
 // Basic home route
 app.get("/", (req, res) => {

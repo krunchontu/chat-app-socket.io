@@ -356,9 +356,20 @@ class UserService {
    * @param {string} userId - The ID of the user logging out.
    * @returns {Promise<void>}
    */
-  async logoutUser(userId) {
+  /**
+   * Logout user - mark as offline and blacklist token
+   * UPDATED (ISSUE-010): Now blacklists JWT token for proper session invalidation
+   *
+   * @param {String} userId - User ID
+   * @param {String} token - JWT token to blacklist
+   * @param {Object} tokenDecoded - Decoded token data (contains exp)
+   * @param {Object} metadata - Additional metadata (userAgent, ipAddress)
+   */
+  async logoutUser(userId, token, tokenDecoded, metadata = {}) {
     try {
       userLogger.info("Service: Logging out user", { userId });
+
+      // Mark user as offline
       const user = await User.findById(userId);
       if (user) {
         user.isOnline = false;
@@ -369,6 +380,34 @@ class UserService {
           userId,
         });
         // Don't throw error, just log, as user might already be gone
+      }
+
+      // SECURITY FIX (ISSUE-010): Blacklist the token
+      if (token && tokenDecoded && tokenDecoded.exp) {
+        const TokenBlacklist = require("../models/tokenBlacklist");
+
+        // Convert JWT exp (seconds) to Date
+        const expiresAt = new Date(tokenDecoded.exp * 1000);
+
+        await TokenBlacklist.blacklistToken(
+          token,
+          userId,
+          expiresAt,
+          "logout",
+          metadata
+        );
+
+        userLogger.info("Service: Token blacklisted successfully", {
+          userId,
+          tokenPrefix: token.substring(0, 10) + "...",
+          expiresAt,
+        });
+      } else {
+        userLogger.warn("Service: Token not blacklisted (missing data)", {
+          userId,
+          hasToken: !!token,
+          hasDecoded: !!tokenDecoded,
+        });
       }
     } catch (error) {
       // Log error but don't necessarily throw, logout should ideally still succeed client-side

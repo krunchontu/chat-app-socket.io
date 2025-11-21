@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
+const TokenBlacklist = require("../models/tokenBlacklist"); // ISSUE-010: Token invalidation
 const logger = require("../utils/logger");
 
 /**
@@ -108,6 +109,19 @@ const socketAuth = async (socket, next) => {
         socketId: socket.id,
       });
       return next(new Error("Invalid token: missing user identification"));
+    }
+
+    // SECURITY FIX (ISSUE-010): Check if token has been blacklisted
+    const isBlacklisted = await TokenBlacklist.isBlacklisted(token);
+    if (isBlacklisted) {
+      logger.auth.warn("Socket auth failed: Blacklisted token used", {
+        socketId: socket.id,
+        userId: decoded.id,
+        tokenPrefix: token.substring(0, 10) + "...",
+      });
+      return next(
+        new Error("Token has been invalidated. Please login again.")
+      );
     }
 
     // Find user with matching ID
