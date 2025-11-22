@@ -1,6 +1,6 @@
 # Issues Tracker - MVP Development
 
-**Last Updated:** November 21, 2025 (Day 2/3 - Implementation Sprint)
+**Last Updated:** November 22, 2025 (Day 3 - Implementation Sprint)
 **Status:** Active Development
 
 ---
@@ -12,10 +12,11 @@
 | **Security** | 0 (was 3) | 0 (was 4) | 2 (was 3) | 3 | 11 | **7** ✅ |
 | **Bugs** | 0 | 0 | 0 | 0 | 0 | 0 |
 | **Features** | 0 | 3 (was 5) | 8 | 10 | 23 | **2** ✅ |
-| **Tech Debt** | 1 | 0 (was 2) | 4 | 3 | 10 | **2** ✅ |
-| **TOTAL** | **1** | **3** | **14** | **16** | **44** | **11** ✅ |
+| **Tech Debt** | 0 (was 1) | 0 (was 2) | 4 | 3 | 10 | **3** ✅ |
+| **Documentation** | 0 | 0 | 0 (was 1) | 0 | 1 | **1** ✅ |
+| **TOTAL** | **0** | **3** | **13** | **16** | **45** | **13** ✅ |
 
-**Day 1 Progress:** 4 HIGH priority issues + 7 security issues resolved! 🚀🚀🚀
+**Day 1-3 Progress:** All 4 CRITICAL/HIGH tech debt + security issues resolved! 🚀🚀🚀
 
 ---
 
@@ -625,13 +626,14 @@ const sanitizeUsername = (username) => {
 ### ISSUE-012: Large Monolithic Server File
 - **Category:** Tech Debt
 - **Priority:** 🔴 HIGH
-- **Status:** 🔴 Open
-- **Assigned:** TBD
+- **Status:** 🟢 Resolved
+- **Assigned:** Development Team
 - **Created:** Nov 21, 2025
+- **Resolved:** Nov 22, 2025 (Day 3)
 - **Due:** Nov 25, 2025 (Day 5)
 
 **Description:**
-`server/index.js` is 621 lines, mixing Express setup, Socket.IO handlers, and business logic.
+`server/index.js` was 758 lines, mixing Express setup, Socket.IO handlers, and business logic.
 
 **Location:**
 - `server/index.js`
@@ -647,13 +649,40 @@ Extract to modules:
 - Difficult to test
 - Code organization poor
 
-**Test Plan:**
-1. Refactor to modules
-2. Verify all tests still pass
-3. Manual testing of socket events
+**Resolution:**
+- ✅ Successfully refactored monolithic socket handlers into modular architecture
+- ✅ Created new directory structure:
+  - `server/sockets/messageHandlers.js` (471 lines) - All message operations
+  - `server/sockets/connectionHandlers.js` (130 lines) - Connection lifecycle
+  - `server/sockets/index.js` (23 lines) - Central export point
+- ✅ Updated `server/index.js`:
+  - Socket connection block: 520 lines → **17 lines** (96% reduction!)
+  - Import modular handlers from `./sockets`
+  - Clean, maintainable connection registration
+  - Old code preserved in comments for reference (can be removed later)
+- ✅ Improved code organization:
+  - **Message Handlers**: message, like, reaction, editMessage, deleteMessage, replyToMessage
+  - **Connection Handlers**: handleConnection, handleDisconnect, sendOnlineUsers
+  - Clear separation of concerns
+  - Each module focused on single responsibility
+- ✅ All 44 backend tests passing (100%)
+  - No breaking changes introduced
+  - Full backward compatibility maintained
+  - Socket event handlers work identically
+- ✅ Benefits achieved:
+  - Much easier to maintain and extend
+  - Individual handlers can be tested in isolation
+  - Clear file structure for new developers
+  - Reduced cognitive load when working on socket logic
+  - Future-proof architecture for additional features
+
+**Test Results:**
+- Backend: 44/44 tests passing ✅
+- Socket functionality: Fully operational ✅
+- No regressions detected ✅
 
 **Related Issues:** None
-**Blockers:** ISSUE-004 (logging should be standardized first)
+**Blockers:** ~~ISSUE-004~~ (resolved)
 
 ---
 
@@ -744,9 +773,10 @@ Add comprehensive tests (see Week 2 plan).
 ### ISSUE-015: No API Documentation
 - **Category:** Documentation
 - **Priority:** 🟡 MEDIUM
-- **Status:** 🔴 Open
-- **Assigned:** TBD
+- **Status:** 🟢 Resolved
+- **Assigned:** Development Team
 - **Created:** Nov 21, 2025
+- **Resolved:** Nov 22, 2025 (Day 3)
 - **Due:** Nov 25, 2025 (Day 5)
 
 **Description:**
@@ -759,6 +789,29 @@ Add Swagger UI at `/api-docs` using `swagger-jsdoc` and `swagger-ui-express`.
 - Difficult for developers to use API
 - Poor developer experience
 - Maintenance challenges
+
+**Resolution:**
+- ✅ Full API documentation implemented with Swagger/OpenAPI 3.0
+  - `server/swagger.js` - Complete Swagger configuration
+  - `/api-docs` endpoint registered in `server/index.js:142-150`
+  - All user routes documented (`server/routes/userRoutes.js`)
+  - All message routes documented (`server/routes/messageRoutes.js`)
+  - All health check routes documented (`server/routes/healthRoutes.js`)
+- ✅ Comprehensive documentation includes:
+  - Authentication endpoints (register, login, logout, profile)
+  - Message endpoints (get, search, replies)
+  - Health check endpoints (health, readiness, liveness)
+  - Request/response schemas for User, Message, Error
+  - JWT Bearer authentication scheme
+  - Rate limiting information
+  - Example requests and responses
+- ✅ Interactive Swagger UI available at:
+  - Development: `http://localhost:5000/api-docs`
+  - Production: `https://your-domain.com/api-docs`
+- ✅ README.md updated with API documentation section (lines 31-43)
+- ✅ No rate limiting applied to /api-docs endpoint
+- ✅ Custom CSS to hide Swagger topbar for cleaner UI
+- API documentation is production-ready and fully functional
 
 **Related Issues:** None
 **Blockers:** None
