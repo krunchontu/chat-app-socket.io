@@ -27,8 +27,40 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "test:coverage": "react-scripts test --coverage --watchAll=false",
+    "test:watch": "react-scripts test",
+    "test:ci": "CI=true react-scripts test --coverage --watchAll=false",
     "eject": "react-scripts eject",
     "lint": "eslint src/**/*.{js,jsx}"
+  },
+  "jest": {
+    "transformIgnorePatterns": [
+      "node_modules/(?!(axios)/)"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 20,
+        "functions": 20,
+        "lines": 20,
+        "statements": 20
+      }
+    },
+    "collectCoverageFrom": [
+      "src/**/*.{js,jsx}",
+      "!src/index.js",
+      "!src/reportWebVitals.js",
+      "!src/service-worker.js",
+      "!src/serviceWorkerRegistration.js",
+      "!src/**/*.test.{js,jsx}",
+      "!src/**/__tests__/**",
+      "!src/test-utils.jsx"
+    ],
+    "coverageReporters": [
+      "text",
+      "text-summary",
+      "html",
+      "lcov"
+    ]
   },
   "eslintConfig": {
     "extends": [
