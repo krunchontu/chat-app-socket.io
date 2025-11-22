@@ -162,6 +162,13 @@ userSchema.set("toJSON", {
   },
 });
 
+// Performance indexes for common queries
+userSchema.index({ username: 1 }); // Username lookup (already unique, but explicit)
+userSchema.index({ email: 1 }); // Email lookup
+userSchema.index({ isOnline: 1 }); // Filter online users
+userSchema.index({ createdAt: -1 }); // Sort by registration time
+userSchema.index({ lockUntil: 1 }); // Check account lockouts
+
 const User = mongoose.model("User", userSchema);
 
 module.exports = User;
