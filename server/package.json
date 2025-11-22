@@ -27,6 +27,8 @@
     "mongoose": "^8.14.0",
     "newrelic": "latest",
     "socket.io": "^4.8.1",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

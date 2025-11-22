@@ -2,10 +2,50 @@
 
 A full-stack real-time chat application built with Node.js, Express, Socket.IO, React, and MongoDB.
 
+## 🚀 Features
+
+### Core Functionality
+- **Real-time Messaging**: Instant message delivery using Socket.IO
+- **User Authentication**: JWT-based authentication with secure password requirements
+- **Message Management**: Edit, delete, and react to messages
+- **User Presence**: Real-time online/offline status tracking
+- **Message History**: Persistent message storage with MongoDB
+- **Message Search**: Full-text search across message history
+- **Threaded Conversations**: Reply to specific messages
+
+### Security & Protection
+- **Account Lockout**: Automatic lockout after 5 failed login attempts (15-minute lock)
+- **Strong Password Requirements**: 8+ characters, uppercase, lowercase, number, special character
+- **Token Blacklisting**: Proper logout with JWT token invalidation
+- **Rate Limiting**: API (100 req/15min) and Socket.IO (30-60 events/min) protection
+- **Input Sanitization**: XSS and NoSQL injection protection
+- **CORS Protection**: Strict whitelist-based CORS policy
+- **Production Security**: Debug logging disabled, mock DB blocked in production
+
+### Monitoring & Operations
+- **Health Endpoints**: `/health`, `/health/readiness`, `/health/liveness`
+- **API Documentation**: Interactive Swagger UI at `/api-docs`
+- **Structured Logging**: Context-rich logging with LogDNA integration
+- **APM Monitoring**: New Relic application performance monitoring
+
+## 📚 API Documentation
+
+Once the server is running, access the interactive API documentation at:
+
+**Local Development**: http://localhost:5000/api-docs
+**Production**: https://your-domain.com/api-docs
+
+The Swagger UI provides:
+- Complete API endpoint documentation
+- Request/response schemas
+- Authentication testing interface
+- Example requests and responses
+
 ## Project Structure
 
 - `/server` - Backend API and Socket.IO server built with Node.js and Express
 - `/chat` - Frontend React application
+- `/docs` - Project documentation and planning
 
 ## Containerization & Deployment
 
