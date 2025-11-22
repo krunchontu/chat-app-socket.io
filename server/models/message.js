@@ -92,8 +92,13 @@ messageSchema.set("toJSON", {
   },
 });
 
-// Create text index on message text for searching
-messageSchema.index({ text: "text" });
+// Performance indexes for common queries
+messageSchema.index({ text: "text" }); // Full-text search on message content
+messageSchema.index({ timestamp: -1 }); // Sort by timestamp (newest first)
+messageSchema.index({ userId: 1, timestamp: -1 }); // User's messages sorted by time
+messageSchema.index({ parentId: 1 }); // Find replies to a message
+messageSchema.index({ isDeleted: 1, timestamp: -1 }); // Filter deleted messages
+messageSchema.index({ createdAt: -1 }); // Sort by creation time
 
 const Message = mongoose.model("Message", messageSchema);
 

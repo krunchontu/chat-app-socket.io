@@ -7,9 +7,11 @@
     "start": "node index.js",
     "start:dev": "nodemon index.js",
     "start:prod": "NEW_RELIC_APP_NAME='Chat App Backend' node -r newrelic index.js",
-    "test": "jest --detectOpenHandles --forceExit",
+    "test": "jest --detectOpenHandles --forceExit --testPathIgnorePatterns='/tests/integration/'",
+    "test:integration": "jest --detectOpenHandles --forceExit tests/integration/",
+    "test:all": "jest --detectOpenHandles --forceExit",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage --testPathIgnorePatterns='/tests/integration/'"
   },
   "author": "",
   "license": "ISC",
@@ -34,6 +36,7 @@
   "devDependencies": {
     "jest": "^29.7.0",
     "nodemon": "^3.0.3",
+    "socket.io-client": "^4.8.1",
     "supertest": "^6.3.3"
   },
   "jest": {
