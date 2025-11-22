@@ -5,6 +5,8 @@ const mongoSanitize = require("express-mongo-sanitize"); // SECURITY: NoSQL inje
 require("dotenv").config(); // Load environment variables from .env file
 const { Server } = require("socket.io"); // Updated import
 const { v4: uuidv4 } = require("uuid"); // Import uuid
+const swaggerUi = require("swagger-ui-express"); // Swagger UI
+const swaggerSpec = require("./swagger"); // Swagger configuration
 const connectDB = require("./config/db"); // Import database connection
 const messageRoutes = require("./routes/messageRoutes"); // Import message routes
 const userRoutes = require("./routes/userRoutes"); // Import user routes
@@ -136,6 +138,17 @@ app.get("/", (req, res) => {
 
 // Health check routes (no rate limiting for monitoring)
 app.use("/", healthRoutes);
+
+// Swagger API Documentation (no rate limiting for docs)
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, {
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: "Chat App API Documentation",
+    customfavIcon: "/favicon.ico"
+  })
+);
 
 // API routes with rate limiting
 app.use("/api", apiLimiter); // Apply rate limiting to all API routes

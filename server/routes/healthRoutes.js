@@ -8,9 +8,71 @@ const { version } = require("../../package.json");
 const serverStartTime = Date.now();
 
 /**
- * GET /health
- * Comprehensive health check endpoint
- * Returns detailed status of all critical services
+ * @swagger
+ * /health:
+ *   get:
+ *     tags: [Health]
+ *     summary: Comprehensive health check
+ *     description: Returns detailed status of all critical services (database, Socket.IO, server metrics)
+ *     responses:
+ *       200:
+ *         description: System healthy or degraded
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   enum: [healthy, degraded, unhealthy]
+ *                   example: healthy
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2025-11-22T00:00:00.000Z"
+ *                 uptime:
+ *                   type: integer
+ *                   description: Server uptime in seconds
+ *                   example: 3600
+ *                 version:
+ *                   type: string
+ *                   example: "1.0.0"
+ *                 database:
+ *                   type: object
+ *                   properties:
+ *                     status:
+ *                       type: string
+ *                       enum: [connected, disconnected, connecting, disconnecting, mock]
+ *                     type:
+ *                       type: string
+ *                       example: mongodb
+ *                     host:
+ *                       type: string
+ *                       example: cluster0.mongodb.net
+ *                 socketio:
+ *                   type: object
+ *                   properties:
+ *                     status:
+ *                       type: string
+ *                       enum: [online, offline]
+ *                     activeConnections:
+ *                       type: integer
+ *                       example: 42
+ *                 server:
+ *                   type: object
+ *                   properties:
+ *                     nodeVersion:
+ *                       type: string
+ *                       example: v18.17.0
+ *                     platform:
+ *                       type: string
+ *                       example: linux
+ *                     memory:
+ *                       type: object
+ *                     cpu:
+ *                       type: object
+ *       503:
+ *         description: System unhealthy (database disconnected)
  */
 router.get("/health", async (req, res) => {
   try {
@@ -157,9 +219,42 @@ router.get("/health", async (req, res) => {
 });
 
 /**
- * GET /health/readiness
- * Kubernetes-style readiness probe
- * Returns 200 if service is ready to accept traffic
+ * @swagger
+ * /health/readiness:
+ *   get:
+ *     tags: [Health]
+ *     summary: Readiness probe (Kubernetes-style)
+ *     description: Returns 200 if service is ready to accept traffic (database connected)
+ *     responses:
+ *       200:
+ *         description: Service is ready
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: ready
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *       503:
+ *         description: Service not ready (database not connected)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: not ready
+ *                 reason:
+ *                   type: string
+ *                   example: database not connected
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
  */
 router.get("/health/readiness", async (req, res) => {
   try {
@@ -189,9 +284,30 @@ router.get("/health/readiness", async (req, res) => {
 });
 
 /**
- * GET /health/liveness
- * Kubernetes-style liveness probe
- * Returns 200 if service is alive (even if not fully operational)
+ * @swagger
+ * /health/liveness:
+ *   get:
+ *     tags: [Health]
+ *     summary: Liveness probe (Kubernetes-style)
+ *     description: Returns 200 if service process is alive (always returns 200 unless crashed)
+ *     responses:
+ *       200:
+ *         description: Service is alive
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: alive
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *                 uptime:
+ *                   type: integer
+ *                   description: Server uptime in seconds
+ *                   example: 3600
  */
 router.get("/health/liveness", (req, res) => {
   res.status(200).json({

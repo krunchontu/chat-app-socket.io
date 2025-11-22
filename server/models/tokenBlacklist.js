@@ -8,6 +8,7 @@
  */
 
 const mongoose = require("mongoose");
+const logger = require("../utils/logger");
 
 const tokenBlacklistSchema = new mongoose.Schema({
   token: {
@@ -88,7 +89,10 @@ tokenBlacklistSchema.statics.blacklistToken = async function (
 
     return blacklistedToken;
   } catch (error) {
-    console.error("Error blacklisting token:", error);
+    logger.db.error("Error blacklisting token", {
+      error: error.message,
+      stack: error.stack
+    });
     throw error;
   }
 };
@@ -104,7 +108,10 @@ tokenBlacklistSchema.statics.isBlacklisted = async function (token) {
     const blacklisted = await this.findOne({ token });
     return !!blacklisted; // Convert to boolean
   } catch (error) {
-    console.error("Error checking token blacklist:", error);
+    logger.db.error("Error checking token blacklist", {
+      error: error.message,
+      stack: error.stack
+    });
     return false; // On error, assume not blacklisted (fail open for availability)
   }
 };
@@ -128,11 +135,15 @@ tokenBlacklistSchema.statics.blacklistAllUserTokens = async function (
 
     // Note: Without storing all active tokens, we can't implement this fully
     // One approach: Store active sessions separately, then blacklist them all
-    console.log(`Blacklisting all tokens for user ${userId}`);
+    logger.auth.info("Blacklisting all tokens for user", { userId });
 
     return 0; // Placeholder
   } catch (error) {
-    console.error("Error blacklisting all user tokens:", error);
+    logger.db.error("Error blacklisting all user tokens", {
+      userId,
+      error: error.message,
+      stack: error.stack
+    });
     throw error;
   }
 };
@@ -151,7 +162,10 @@ tokenBlacklistSchema.statics.cleanupExpired = async function () {
 
     return result.deletedCount;
   } catch (error) {
-    console.error("Error cleaning up expired blacklist entries:", error);
+    logger.db.error("Error cleaning up expired blacklist entries", {
+      error: error.message,
+      stack: error.stack
+    });
     throw error;
   }
 };
