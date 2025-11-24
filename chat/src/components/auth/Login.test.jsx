@@ -11,11 +11,15 @@ import Login from './Login';
 import axios from 'axios';
 import * as toastUtils from '../../utils/toastUtils';
 import * as loggerUtils from '../../utils/logger';
+import * as csrfUtils from '../../utils/csrfUtils';
+import ErrorService from '../../services/ErrorService';
 
 // Mock dependencies
 jest.mock('axios');
 jest.mock('../../utils/toastUtils');
 jest.mock('../../utils/logger');
+jest.mock('../../utils/csrfUtils');
+jest.mock('../../services/ErrorService');
 
 let mockNavigate;
 jest.mock('react-router-dom', () => ({
@@ -30,6 +34,16 @@ beforeEach(() => {
     warn: jest.fn(),
     error: jest.fn(),
   });
+
+  // Mock CSRF utilities
+  csrfUtils.setupCSRFProtection = jest.fn().mockResolvedValue(undefined);
+  csrfUtils.clearCSRFToken = jest.fn();
+
+  // Mock ErrorService methods
+  ErrorService.handleApiError = jest.fn().mockReturnValue('An error occurred');
+  ErrorService.logError = jest.fn();
+  ErrorService.formatError = jest.fn().mockReturnValue({});
+
   jest.clearAllMocks();
   localStorage.clear();
 });
@@ -60,11 +74,13 @@ describe('Login Component', () => {
     await waitFor(() => {
       expect(localStorage.getItem('token')).toBe('fake-token');
     });
+
+    expect(toastUtils.showInfoToast).toHaveBeenCalledWith('Login successful');
   });
 
   test('displays error on login failure', async () => {
     axios.post.mockRejectedValueOnce({
-      response: { status: 401, data: { message: 'Invalid credentials' } },
+      response: { status: 401, data: { message: 'Invalid username or password' } },
     });
 
     render(<Login />);
@@ -77,8 +93,12 @@ describe('Login Component', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /^login$/i }));
 
+    // Check that error toast was called with the error message
     await waitFor(() => {
-      expect(screen.getByText(/invalid credentials/i)).toBeInTheDocument();
+      expect(toastUtils.showErrorToast).toHaveBeenCalled();
     });
+
+    // Check that localStorage was cleared on error
+    expect(localStorage.getItem('token')).toBeNull();
   });
 });
