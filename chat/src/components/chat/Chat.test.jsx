@@ -5,8 +5,8 @@
  */
 
 import React from 'react';
-import { screen, waitFor, fireEvent, act } from '@testing-library/react';
-import { render, createMockSocket, createMockMessage, createMockMessages } from '../../test-utils';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { createMockSocket, createMockMessage, createMockMessages } from '../../test-utils';
 import ChatApp from './Chat';
 import * as toastUtils from '../../utils/toastUtils';
 import * as loggerUtils from '../../utils/logger';
@@ -102,24 +102,28 @@ const mockReplyToMessage = jest.fn();
 const mockLoadMoreMessages = jest.fn();
 const mockFetchInitialMessages = jest.fn();
 
+const mockUseChatReturn = {
+  messages: [],
+  socket: null,
+  isConnected: false,
+  loadingMessages: false,
+  messageError: null,
+  onlineUsers: [],
+  notifications: [],
+  pagination: { currentPage: 1, totalPages: 1, totalMessages: 0, messagesPerPage: 50 },
+  hasMoreMessages: false,
+  replyingTo: null,
+  loadMoreMessages: mockLoadMoreMessages,
+  fetchInitialMessages: mockFetchInitialMessages,
+  replyToMessage: mockReplyToMessage,
+  sendMessage: mockSendMessage,
+  setReplyingTo: mockSetReplyingTo,
+};
+
+const mockUseChat = jest.fn(() => mockUseChatReturn);
+
 jest.mock('../../context/ChatContext', () => ({
-  useChat: () => ({
-    messages: [],
-    socket: null,
-    isConnected: false,
-    loadingMessages: false,
-    messageError: null,
-    onlineUsers: [],
-    notifications: [],
-    pagination: { currentPage: 1, totalPages: 1, totalMessages: 0, messagesPerPage: 50 },
-    hasMoreMessages: false,
-    replyingTo: null,
-    loadMoreMessages: mockLoadMoreMessages,
-    fetchInitialMessages: mockFetchInitialMessages,
-    replyToMessage: mockReplyToMessage,
-    sendMessage: mockSendMessage,
-    setReplyingTo: mockSetReplyingTo,
-  }),
+  useChat: mockUseChat,
 }));
 
 jest.mock('../common/AuthContext', () => ({
@@ -173,9 +177,8 @@ describe('Chat Component', () => {
     });
 
     test('displays connection status', () => {
-      const { useChat } = require('../../context/ChatContext');
-      useChat.mockReturnValue({
-        ...useChat(),
+      mockUseChat.mockReturnValueOnce({
+        ...mockUseChatReturn,
         isConnected: true,
       });
 
@@ -185,9 +188,8 @@ describe('Chat Component', () => {
     });
 
     test('shows loading state when loading messages', () => {
-      const { useChat } = require('../../context/ChatContext');
-      useChat.mockReturnValue({
-        ...useChat(),
+      mockUseChat.mockReturnValueOnce({
+        ...mockUseChatReturn,
         loadingMessages: true,
       });
 
@@ -197,9 +199,8 @@ describe('Chat Component', () => {
     });
 
     test('displays error message when message error exists', () => {
-      const { useChat } = require('../../context/ChatContext');
-      useChat.mockReturnValue({
-        ...useChat(),
+      mockUseChat.mockReturnValueOnce({
+        ...mockUseChatReturn,
         messageError: 'Failed to load messages',
       });
 
@@ -218,9 +219,8 @@ describe('Chat Component', () => {
 
   describe('Message Sending', () => {
     test('handles sending a regular message', async () => {
-      const { useChat } = require('../../context/ChatContext');
-      useChat.mockReturnValue({
-        ...useChat(),
+      mockUseChat.mockReturnValueOnce({
+        ...mockUseChatReturn,
         isConnected: true,
         socket: createMockSocket(),
       });
@@ -243,9 +243,8 @@ describe('Chat Component', () => {
     });
 
     test('prevents sending empty messages', async () => {
-      const { useChat } = require('../../context/ChatContext');
-      useChat.mockReturnValue({
-        ...useChat(),
+      mockUseChat.mockReturnValueOnce({
+        ...mockUseChatReturn,
         isConnected: true,
         socket: createMockSocket(),
       });
@@ -268,9 +267,8 @@ describe('Chat Component', () => {
     });
 
     test('prevents sending messages over 500 characters', async () => {
-      const { useChat } = require('../../context/ChatContext');
-      useChat.mockReturnValue({
-        ...useChat(),
+      mockUseChat.mockReturnValueOnce({
+        ...mockUseChatReturn,
         isConnected: true,
         socket: createMockSocket(),
       });
@@ -296,9 +294,8 @@ describe('Chat Component', () => {
     });
 
     test('prevents sending when not connected', async () => {
-      const { useChat } = require('../../context/ChatContext');
-      useChat.mockReturnValue({
-        ...useChat(),
+      mockUseChat.mockReturnValueOnce({
+        ...mockUseChatReturn,
         isConnected: false,
         socket: null,
       });
@@ -317,9 +314,8 @@ describe('Chat Component', () => {
     test('handles sending a reply message', async () => {
       const replyMessage = createMockMessage({ id: 'msg-1', text: 'Original message' });
 
-      const { useChat } = require('../../context/ChatContext');
-      useChat.mockReturnValue({
-        ...useChat(),
+      mockUseChat.mockReturnValueOnce({
+        ...mockUseChatReturn,
         isConnected: true,
         socket: createMockSocket(),
         replyingTo: replyMessage,
@@ -348,9 +344,8 @@ describe('Chat Component', () => {
     test('cancels reply when cancel button clicked', async () => {
       const replyMessage = createMockMessage({ id: 'msg-1', text: 'Original message' });
 
-      const { useChat } = require('../../context/ChatContext');
-      useChat.mockReturnValue({
-        ...useChat(),
+      mockUseChat.mockReturnValueOnce({
+        ...mockUseChatReturn,
         replyingTo: replyMessage,
       });
 
@@ -368,9 +363,8 @@ describe('Chat Component', () => {
 
   describe('Message Synchronization', () => {
     test('auto-syncs messages when connected', async () => {
-      const { useChat } = require('../../context/ChatContext');
-      useChat.mockReturnValue({
-        ...useChat(),
+      mockUseChat.mockReturnValueOnce({
+        ...mockUseChatReturn,
         isConnected: true,
       });
 
@@ -387,9 +381,8 @@ describe('Chat Component', () => {
     });
 
     test('cleans up sync interval on unmount', async () => {
-      const { useChat } = require('../../context/ChatContext');
-      useChat.mockReturnValue({
-        ...useChat(),
+      mockUseChat.mockReturnValueOnce({
+        ...mockUseChatReturn,
         isConnected: true,
       });
 
@@ -411,9 +404,8 @@ describe('Chat Component', () => {
     test('disconnects socket on logout', async () => {
       const mockSocket = createMockSocket();
 
-      const { useChat } = require('../../context/ChatContext');
-      useChat.mockReturnValue({
-        ...useChat(),
+      mockUseChat.mockReturnValueOnce({
+        ...mockUseChatReturn,
         socket: mockSocket,
       });
 
@@ -433,9 +425,8 @@ describe('Chat Component', () => {
     test('renders messages from context', () => {
       const messages = createMockMessages(3);
 
-      const { useChat } = require('../../context/ChatContext');
-      useChat.mockReturnValue({
-        ...useChat(),
+      mockUseChat.mockReturnValueOnce({
+        ...mockUseChatReturn,
         messages,
       });
 
@@ -449,9 +440,8 @@ describe('Chat Component', () => {
     test('displays online users count in sidebar', () => {
       const onlineUsers = ['user1', 'user2', 'user3'];
 
-      const { useChat } = require('../../context/ChatContext');
-      useChat.mockReturnValue({
-        ...useChat(),
+      mockUseChat.mockReturnValueOnce({
+        ...mockUseChatReturn,
         onlineUsers,
       });
 
