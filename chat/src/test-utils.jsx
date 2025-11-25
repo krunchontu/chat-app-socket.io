@@ -164,5 +164,8 @@ export function createMockAxiosError(message, status = 400, data = {}) {
 // Re-export everything from React Testing Library
 export * from '@testing-library/react';
 
+// Re-export socket mock utilities
+export * from './test-utils/socketMock';
+
 // Override the default render with our custom render
 export { render };
