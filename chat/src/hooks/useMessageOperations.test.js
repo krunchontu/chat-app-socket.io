@@ -29,6 +29,12 @@ jest.mock('../utils/offlineQueue', () => ({
   processQueue: jest.fn(),
 }));
 
+jest.mock('../components/common/AuthContext', () => ({
+  useAuth: () => ({
+    user: { username: 'testuser', id: '123' },
+  }),
+}));
+
 describe('useMessageOperations', () => {
   let mockSocket;
   let mockDispatchMessages;

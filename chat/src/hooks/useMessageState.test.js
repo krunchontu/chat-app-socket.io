@@ -27,6 +27,12 @@ jest.mock('../services/ErrorService', () => ({
   },
 }));
 
+jest.mock('../components/common/AuthContext', () => ({
+  useAuth: () => ({
+    user: { username: 'testuser', id: '123' },
+  }),
+}));
+
 describe('useMessageState', () => {
   beforeEach(() => {
     jest.clearAllMocks();

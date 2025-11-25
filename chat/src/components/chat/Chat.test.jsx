@@ -13,7 +13,14 @@ import * as loggerUtils from '../../utils/logger';
 
 // Mock dependencies
 jest.mock('../../utils/toastUtils');
-jest.mock('../../utils/logger');
+jest.mock('../../utils/logger', () => ({
+  createLogger: jest.fn(() => ({
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  })),
+}));
 jest.mock('../../context/ThemeContext', () => ({
   useTheme: () => ({ theme: 'light' }),
 }));
@@ -95,7 +102,7 @@ jest.mock('./ReplyingTo', () => {
   };
 });
 
-// Mock hooks
+// Mock hooks - define mocks that will be used
 const mockSetReplyingTo = jest.fn();
 const mockSendMessage = jest.fn();
 const mockReplyToMessage = jest.fn();
@@ -120,10 +127,11 @@ const mockUseChatReturn = {
   setReplyingTo: mockSetReplyingTo,
 };
 
-const mockUseChat = jest.fn(() => mockUseChatReturn);
+// Create mockUseChat inside the factory function to avoid hoisting issues
+let mockUseChat;
 
 jest.mock('../../context/ChatContext', () => ({
-  useChat: mockUseChat,
+  useChat: jest.fn(() => mockUseChatReturn),
 }));
 
 jest.mock('../common/AuthContext', () => ({
@@ -141,6 +149,9 @@ jest.mock('../../hooks/useChatScroll', () => {
   }));
 });
 
+// Store the mock function for useChatNotificationsUI
+let mockUseChatNotificationsUI;
+
 jest.mock('../../hooks/useChatNotificationsUI', () => {
   return jest.fn(() => ({
     notificationsEnabled: true,
@@ -149,6 +160,7 @@ jest.mock('../../hooks/useChatNotificationsUI', () => {
 });
 
 beforeEach(() => {
+  // Setup logger mock FIRST - this needs to be available during component render
   loggerUtils.createLogger.mockReturnValue({
     info: jest.fn(),
     warn: jest.fn(),
@@ -156,7 +168,35 @@ beforeEach(() => {
     debug: jest.fn(),
   });
 
-  jest.clearAllMocks();
+  // Get the mocked functions
+  const { useChat } = require('../../context/ChatContext');
+  mockUseChat = useChat;
+
+  mockUseChatScroll = require('../../hooks/useChatScroll');
+  mockUseChatNotificationsUI = require('../../hooks/useChatNotificationsUI');
+
+  // Reset mock function calls
+  mockSendMessage.mockClear();
+  mockReplyToMessage.mockClear();
+  mockLoadMoreMessages.mockClear();
+  mockFetchInitialMessages.mockClear();
+  mockSetReplyingTo.mockClear();
+
+  // Set default return values - use mockReturnValue so mockReturnValueOnce can override
+  mockUseChat.mockReturnValue(mockUseChatReturn);
+
+  mockUseChatScroll.mockReturnValue({
+    chatThreadRef: { current: null },
+    loadingOlder: false,
+    scrollToBottom: jest.fn(),
+    setLoadingOlder: jest.fn(),
+  });
+
+  mockUseChatNotificationsUI.mockReturnValue({
+    notificationsEnabled: true,
+    toggleNotifications: jest.fn(),
+  });
+
   jest.useFakeTimers();
 });
 
