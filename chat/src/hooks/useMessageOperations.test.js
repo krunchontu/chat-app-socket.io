@@ -25,7 +25,6 @@ jest.mock('../utils/toastUtils', () => ({
 }));
 
 jest.mock('../utils/offlineQueue', () => ({
-  addToQueue: jest.fn(),
   processQueue: jest.fn(),
   queueMessage: jest.fn(),
   createOptimisticMessage: jest.fn((text, username) => ({
@@ -87,8 +86,8 @@ describe('useMessageOperations', () => {
         result.current.sendMessage('Hello world');
       });
 
-      expect(mockSocket.emit).toHaveBeenCalledWith(
-        'sendMessage',
+      expect(mockEmitEvent).toHaveBeenCalledWith(
+        'message',
         expect.objectContaining({
           text: 'Hello world',
         })
@@ -134,13 +133,13 @@ describe('useMessageOperations', () => {
         )
       );
 
-      const { addToQueue } = require('../utils/offlineQueue');
+      const { queueMessage } = require('../utils/offlineQueue');
 
       act(() => {
         result.current.sendMessage('Offline message');
       });
 
-      expect(addToQueue).toHaveBeenCalled();
+      expect(queueMessage).toHaveBeenCalled();
     });
 
     test('sendMessage does not emit when not connected', () => {

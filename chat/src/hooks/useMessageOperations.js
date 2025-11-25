@@ -52,6 +52,10 @@ const useMessageOperations = (
   // Helper to handle offline message queuing and UI feedback
   const handleOfflineMessage = useCallback(
     (message, type, options = {}) => {
+      if (!message) {
+        logger.error("handleOfflineMessage called with undefined message");
+        return;
+      }
       queueMessage(message, type, options);
       addSystemNotification(
         `${
@@ -60,7 +64,7 @@ const useMessageOperations = (
       );
       logger.info("Message queued for offline sending", {
         type,
-        tempId: message.id,
+        tempId: message?.id,
       });
     },
     [addSystemNotification]
