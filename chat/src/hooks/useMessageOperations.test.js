@@ -27,6 +27,16 @@ jest.mock('../utils/toastUtils', () => ({
 jest.mock('../utils/offlineQueue', () => ({
   addToQueue: jest.fn(),
   processQueue: jest.fn(),
+  queueMessage: jest.fn(),
+  createOptimisticMessage: jest.fn((text, username) => ({
+    id: 'temp-' + Date.now(),
+    tempId: 'temp-' + Date.now(),
+    text,
+    user: username,
+    timestamp: Date.now(),
+    isPending: true,
+  })),
+  replaceOptimisticMessage: jest.fn(),
 }));
 
 jest.mock('../components/common/AuthContext', () => ({
@@ -61,7 +71,17 @@ describe('useMessageOperations', () => {
 
   describe('Send Message', () => {
     test('sendMessage emits socket event when connected', () => {
-      const { result } = renderHook(() => useMessageOperations(...Object.values(defaultProps)));
+      const { result } = renderHook(() =>
+        useMessageOperations(
+          mockSocket,
+          true, // isConnected
+          true, // isOnline
+          mockDispatchMessages,
+          mockDispatchUi,
+          [],
+          mockEmitEvent
+        )
+      );
 
       act(() => {
         result.current.sendMessage('Hello world');
@@ -76,7 +96,15 @@ describe('useMessageOperations', () => {
     });
 
     test('sendMessage creates optimistic message', () => {
-      const { result } = renderHook(() => useMessageOperations(...Object.values(defaultProps)));
+      const { result } = renderHook(() => useMessageOperations(
+          mockSocket,
+          true, // isConnected
+          true, // isOnline
+          mockDispatchMessages,
+          mockDispatchUi,
+          [],
+          mockEmitEvent
+        ));
 
       act(() => {
         result.current.sendMessage('Test message');
@@ -94,8 +122,17 @@ describe('useMessageOperations', () => {
     });
 
     test('sendMessage queues message when offline', () => {
-      const offlineProps = { ...defaultProps, isOnline: false };
-      const { result } = renderHook(() => useMessageOperations(...Object.values(offlineProps)));
+      const { result } = renderHook(() =>
+        useMessageOperations(
+          mockSocket,
+          true, // isConnected
+          false, // isOnline - OFFLINE
+          mockDispatchMessages,
+          mockDispatchUi,
+          [],
+          mockEmitEvent
+        )
+      );
 
       const { addToQueue } = require('../utils/offlineQueue');
 
@@ -107,8 +144,17 @@ describe('useMessageOperations', () => {
     });
 
     test('sendMessage does not emit when not connected', () => {
-      const disconnectedProps = { ...defaultProps, isConnected: false };
-      const { result } = renderHook(() => useMessageOperations(...Object.values(disconnectedProps)));
+      const { result } = renderHook(() =>
+        useMessageOperations(
+          mockSocket,
+          false, // isConnected - DISCONNECTED
+          true, // isOnline
+          mockDispatchMessages,
+          mockDispatchUi,
+          [],
+          mockEmitEvent
+        )
+      );
 
       act(() => {
         result.current.sendMessage('Test');
@@ -121,7 +167,15 @@ describe('useMessageOperations', () => {
 
   describe('Edit Message', () => {
     test('editMessage emits socket event', () => {
-      const { result } = renderHook(() => useMessageOperations(...Object.values(defaultProps)));
+      const { result } = renderHook(() => useMessageOperations(
+          mockSocket,
+          true, // isConnected
+          true, // isOnline
+          mockDispatchMessages,
+          mockDispatchUi,
+          [],
+          mockEmitEvent
+        ));
 
       act(() => {
         result.current.editMessage('msg-1', 'Edited text');
@@ -137,7 +191,15 @@ describe('useMessageOperations', () => {
     });
 
     test('editMessage updates local state optimistically', () => {
-      const { result } = renderHook(() => useMessageOperations(...Object.values(defaultProps)));
+      const { result } = renderHook(() => useMessageOperations(
+          mockSocket,
+          true, // isConnected
+          true, // isOnline
+          mockDispatchMessages,
+          mockDispatchUi,
+          [],
+          mockEmitEvent
+        ));
 
       act(() => {
         result.current.editMessage('msg-1', 'Edited text');
@@ -158,7 +220,15 @@ describe('useMessageOperations', () => {
 
   describe('Delete Message', () => {
     test('deleteMessage emits socket event', () => {
-      const { result } = renderHook(() => useMessageOperations(...Object.values(defaultProps)));
+      const { result } = renderHook(() => useMessageOperations(
+          mockSocket,
+          true, // isConnected
+          true, // isOnline
+          mockDispatchMessages,
+          mockDispatchUi,
+          [],
+          mockEmitEvent
+        ));
 
       act(() => {
         result.current.deleteMessage('msg-1');
@@ -168,7 +238,15 @@ describe('useMessageOperations', () => {
     });
 
     test('deleteMessage updates local state optimistically', () => {
-      const { result } = renderHook(() => useMessageOperations(...Object.values(defaultProps)));
+      const { result } = renderHook(() => useMessageOperations(
+          mockSocket,
+          true, // isConnected
+          true, // isOnline
+          mockDispatchMessages,
+          mockDispatchUi,
+          [],
+          mockEmitEvent
+        ));
 
       act(() => {
         result.current.deleteMessage('msg-1');
@@ -185,7 +263,15 @@ describe('useMessageOperations', () => {
 
   describe('Reply to Message', () => {
     test('replyToMessage sends message with parentId', () => {
-      const { result } = renderHook(() => useMessageOperations(...Object.values(defaultProps)));
+      const { result } = renderHook(() => useMessageOperations(
+          mockSocket,
+          true, // isConnected
+          true, // isOnline
+          mockDispatchMessages,
+          mockDispatchUi,
+          [],
+          mockEmitEvent
+        ));
 
       act(() => {
         result.current.replyToMessage('parent-1', 'Reply text');
@@ -201,7 +287,15 @@ describe('useMessageOperations', () => {
     });
 
     test('replyToMessage clears replying state', () => {
-      const { result } = renderHook(() => useMessageOperations(...Object.values(defaultProps)));
+      const { result } = renderHook(() => useMessageOperations(
+          mockSocket,
+          true, // isConnected
+          true, // isOnline
+          mockDispatchMessages,
+          mockDispatchUi,
+          [],
+          mockEmitEvent
+        ));
 
       act(() => {
         result.current.replyToMessage('parent-1', 'Reply');
@@ -221,8 +315,17 @@ describe('useMessageOperations', () => {
         { id: 'msg-1', text: 'Test', reactions: {} },
       ];
 
-      const propsWithMessages = { ...defaultProps, messages: messagesWithMessage };
-      const { result } = renderHook(() => useMessageOperations(...Object.values(propsWithMessages)));
+      const { result } = renderHook(() =>
+        useMessageOperations(
+          mockSocket,
+          true, // isConnected
+          true, // isOnline
+          mockDispatchMessages,
+          mockDispatchUi,
+          messagesWithMessage, // pass messages with message
+          mockEmitEvent
+        )
+      );
 
       act(() => {
         result.current.toggleReaction('msg-1', '👍');
@@ -242,8 +345,17 @@ describe('useMessageOperations', () => {
         { id: 'msg-1', text: 'Test', reactions: {} },
       ];
 
-      const propsWithMessages = { ...defaultProps, messages: messagesWithMessage };
-      const { result } = renderHook(() => useMessageOperations(...Object.values(propsWithMessages)));
+      const { result } = renderHook(() =>
+        useMessageOperations(
+          mockSocket,
+          true, // isConnected
+          true, // isOnline
+          mockDispatchMessages,
+          mockDispatchUi,
+          messagesWithMessage, // pass messages with message
+          mockEmitEvent
+        )
+      );
 
       act(() => {
         result.current.toggleReaction('msg-1', '❤️');
@@ -259,8 +371,17 @@ describe('useMessageOperations', () => {
 
   describe('Edge Cases', () => {
     test('handles null socket gracefully', () => {
-      const nullSocketProps = { ...defaultProps, socket: null };
-      const { result } = renderHook(() => useMessageOperations(...Object.values(nullSocketProps)));
+      const { result } = renderHook(() =>
+        useMessageOperations(
+          null, // socket - NULL
+          true, // isConnected
+          true, // isOnline
+          mockDispatchMessages,
+          mockDispatchUi,
+          [],
+          mockEmitEvent
+        )
+      );
 
       expect(() => {
         act(() => {
@@ -270,7 +391,17 @@ describe('useMessageOperations', () => {
     });
 
     test('handles empty message text', () => {
-      const { result } = renderHook(() => useMessageOperations(...Object.values(defaultProps)));
+      const { result } = renderHook(() =>
+        useMessageOperations(
+          mockSocket,
+          true, // isConnected
+          true, // isOnline
+          mockDispatchMessages,
+          mockDispatchUi,
+          [],
+          mockEmitEvent
+        )
+      );
 
       act(() => {
         result.current.sendMessage('');
@@ -281,8 +412,17 @@ describe('useMessageOperations', () => {
     });
 
     test('handles message operations when disconnected', () => {
-      const disconnectedProps = { ...defaultProps, isConnected: false };
-      const { result } = renderHook(() => useMessageOperations(...Object.values(disconnectedProps)));
+      const { result } = renderHook(() =>
+        useMessageOperations(
+          mockSocket,
+          false, // isConnected - DISCONNECTED
+          true, // isOnline
+          mockDispatchMessages,
+          mockDispatchUi,
+          [],
+          mockEmitEvent
+        )
+      );
 
       expect(() => {
         act(() => {

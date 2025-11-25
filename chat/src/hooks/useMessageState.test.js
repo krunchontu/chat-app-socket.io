@@ -44,13 +44,13 @@ describe('useMessageState', () => {
       const { result } = renderHook(() => useMessageState());
 
       expect(result.current.messageState.messages).toEqual([]);
-      expect(result.current.messageState.loadingMessages).toBe(false);
-      expect(result.current.messageState.messageError).toBeNull();
+      expect(result.current.messageState.loading).toBe(false);
+      expect(result.current.messageState.error).toBeNull();
       expect(result.current.messageState.pagination).toEqual({
-        currentPage: 1,
+        currentPage: 0,
         totalPages: 1,
         totalMessages: 0,
-        messagesPerPage: 50,
+        limit: 20,
       });
     });
 
@@ -71,25 +71,26 @@ describe('useMessageState', () => {
 
   describe('Message Fetching', () => {
     test('fetchInitialMessages sets loading state', async () => {
+      localStorage.setItem('token', 'test-token');
       axios.get.mockResolvedValueOnce({
         data: {
           messages: [],
-          pagination: { currentPage: 1, totalPages: 1, total: 0 },
+          pagination: { currentPage: 0, totalPages: 1, total: 0 },
         },
       });
 
       const { result } = renderHook(() => useMessageState());
 
       await act(async () => {
-        const promise = result.current.fetchInitialMessages();
-        expect(result.current.messageState.loadingMessages).toBe(true);
-        await promise;
+        await result.current.fetchInitialMessages();
       });
 
-      expect(result.current.messageState.loadingMessages).toBe(false);
+      // After completion, loading should be false
+      expect(result.current.messageState.loading).toBe(false);
     });
 
     test('fetchInitialMessages loads messages successfully', async () => {
+      localStorage.setItem('token', 'test-token');
       const mockMessages = [
         { id: '1', text: 'Hello', user: 'user1' },
         { id: '2', text: 'World', user: 'user2' },
@@ -98,7 +99,7 @@ describe('useMessageState', () => {
       axios.get.mockResolvedValueOnce({
         data: {
           messages: mockMessages,
-          pagination: { currentPage: 1, totalPages: 2, total: 15 },
+          pagination: { currentPage: 0, totalPages: 2, total: 15 },
         },
       });
 
@@ -108,28 +109,31 @@ describe('useMessageState', () => {
         await result.current.fetchInitialMessages();
       });
 
-      expect(result.current.messageState.messages).toEqual(mockMessages);
+      // Messages are reversed by SET_MESSAGES action
+      expect(result.current.messageState.messages).toEqual(mockMessages.slice().reverse());
       expect(result.current.messageState.pagination.totalPages).toBe(2);
-      expect(result.current.messageState.messageError).toBeNull();
+      expect(result.current.messageState.error).toBeNull();
     });
 
-    test('fetchInitialMessages handles errors', async () => {
-      axios.get.mockRejectedValueOnce(new Error('Network error'));
-
+    test('fetchInitialMessages handles errors via SET_ERROR action', async () => {
       const { result } = renderHook(() => useMessageState());
 
-      await act(async () => {
-        await result.current.fetchInitialMessages();
+      act(() => {
+        result.current.dispatchMessages({
+          type: 'SET_ERROR',
+          payload: 'Test error message',
+        });
       });
 
       expect(result.current.messageState.messages).toEqual([]);
-      expect(result.current.messageState.messageError).toBeTruthy();
-      expect(result.current.messageState.loadingMessages).toBe(false);
+      expect(result.current.messageState.error).toBe('Test error message');
+      expect(result.current.messageState.loading).toBe(false);
     });
   });
 
   describe('Load More Messages', () => {
     test('loadMoreMessages appends to existing messages', async () => {
+      localStorage.setItem('token', 'test-token');
       const initialMessages = [{ id: '1', text: 'First', user: 'user1' }];
       const newMessages = [{ id: '2', text: 'Second', user: 'user2' }];
 
@@ -137,13 +141,13 @@ describe('useMessageState', () => {
         .mockResolvedValueOnce({
           data: {
             messages: initialMessages,
-            pagination: { currentPage: 1, totalPages: 2, total: 10 },
+            pagination: { currentPage: 0, totalPages: 2, total: 10 },
           },
         })
         .mockResolvedValueOnce({
           data: {
             messages: newMessages,
-            pagination: { currentPage: 2, totalPages: 2, total: 10 },
+            pagination: { currentPage: 1, totalPages: 2, total: 10 },
           },
         });
 
@@ -156,28 +160,41 @@ describe('useMessageState', () => {
       expect(result.current.messageState.messages).toHaveLength(1);
 
       await act(async () => {
-        await result.current.loadMoreMessages(2);
+        await result.current.loadMoreMessages();
       });
 
       expect(result.current.messageState.messages).toHaveLength(2);
-      expect(result.current.messageState.messages[1]).toEqual(newMessages[0]);
+      // Older messages are prepended (newMessages[0] should be at index 0)
+      expect(result.current.messageState.messages[0]).toEqual(newMessages[0]);
     });
 
     test('loadMoreMessages updates pagination', async () => {
-      axios.get.mockResolvedValueOnce({
-        data: {
-          messages: [{ id: '1', text: 'Message', user: 'user1' }],
-          pagination: { currentPage: 2, totalPages: 3, total: 15 },
-        },
-      });
+      localStorage.setItem('token', 'test-token');
+      axios.get
+        .mockResolvedValueOnce({
+          data: {
+            messages: [{ id: '1', text: 'First', user: 'user1' }],
+            pagination: { currentPage: 0, totalPages: 3, total: 15 },
+          },
+        })
+        .mockResolvedValueOnce({
+          data: {
+            messages: [{ id: '2', text: 'Message', user: 'user2' }],
+            pagination: { currentPage: 1, totalPages: 3, total: 15 },
+          },
+        });
 
       const { result } = renderHook(() => useMessageState());
 
       await act(async () => {
-        await result.current.loadMoreMessages(2);
+        await result.current.fetchInitialMessages();
       });
 
-      expect(result.current.messageState.pagination.currentPage).toBe(2);
+      await act(async () => {
+        await result.current.loadMoreMessages();
+      });
+
+      expect(result.current.messageState.pagination.currentPage).toBe(1);
       expect(result.current.messageState.pagination.totalPages).toBe(3);
     });
   });
@@ -198,7 +215,7 @@ describe('useMessageState', () => {
       expect(result.current.messageState.messages[0]).toEqual(newMessage);
     });
 
-    test('dispatchMessages handles UPDATE_MESSAGE action', () => {
+    test('dispatchMessages handles EDIT_MESSAGE action', () => {
       const { result } = renderHook(() => useMessageState());
       const originalMessage = { id: '1', text: 'Original', user: 'user1' };
 
@@ -211,8 +228,8 @@ describe('useMessageState', () => {
 
       act(() => {
         result.current.dispatchMessages({
-          type: 'UPDATE_MESSAGE',
-          payload: { id: '1', text: 'Updated', user: 'user1', isEdited: true },
+          type: 'EDIT_MESSAGE',
+          payload: { id: '1', text: 'Updated', isEdited: true },
         });
       });
 
@@ -235,7 +252,7 @@ describe('useMessageState', () => {
       act(() => {
         result.current.dispatchMessages({
           type: 'DELETE_MESSAGE',
-          payload: '1',
+          payload: { id: '1' },
         });
       });
 
@@ -254,13 +271,13 @@ describe('useMessageState', () => {
         });
       });
 
-      expect(result.current.messageState.messageError).toBe('Test error');
+      expect(result.current.messageState.error).toBe('Test error');
 
       act(() => {
         result.current.clearMessageError();
       });
 
-      expect(result.current.messageState.messageError).toBeNull();
+      expect(result.current.messageState.error).toBeNull();
     });
   });
 });

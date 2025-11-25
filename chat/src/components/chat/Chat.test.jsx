@@ -182,6 +182,9 @@ beforeEach(() => {
   mockFetchInitialMessages.mockClear();
   mockSetReplyingTo.mockClear();
 
+  // Setup fetchInitialMessages to return a resolved promise
+  mockFetchInitialMessages.mockResolvedValue();
+
   // Set default return values - use mockReturnValue so mockReturnValueOnce can override
   mockUseChat.mockReturnValue(mockUseChatReturn);
 
@@ -252,14 +255,14 @@ describe('Chat Component', () => {
     test('shows notification toggle button', () => {
       render(<ChatApp />);
 
-      const notificationButton = screen.getByLabelText(/notifications on/i);
+      const notificationButton = screen.getByText(/notifications on/i);
       expect(notificationButton).toBeInTheDocument();
     });
   });
 
   describe('Message Sending', () => {
     test('handles sending a regular message', async () => {
-      mockUseChat.mockReturnValueOnce({
+      mockUseChat.mockReturnValue({
         ...mockUseChatReturn,
         isConnected: true,
         socket: createMockSocket(),
@@ -283,7 +286,7 @@ describe('Chat Component', () => {
     });
 
     test('prevents sending empty messages', async () => {
-      mockUseChat.mockReturnValueOnce({
+      mockUseChat.mockReturnValue({
         ...mockUseChatReturn,
         isConnected: true,
         socket: createMockSocket(),
@@ -307,7 +310,7 @@ describe('Chat Component', () => {
     });
 
     test('prevents sending messages over 500 characters', async () => {
-      mockUseChat.mockReturnValueOnce({
+      mockUseChat.mockReturnValue({
         ...mockUseChatReturn,
         isConnected: true,
         socket: createMockSocket(),
@@ -354,7 +357,7 @@ describe('Chat Component', () => {
     test('handles sending a reply message', async () => {
       const replyMessage = createMockMessage({ id: 'msg-1', text: 'Original message' });
 
-      mockUseChat.mockReturnValueOnce({
+      mockUseChat.mockReturnValue({
         ...mockUseChatReturn,
         isConnected: true,
         socket: createMockSocket(),
@@ -403,16 +406,17 @@ describe('Chat Component', () => {
 
   describe('Message Synchronization', () => {
     test('auto-syncs messages when connected', async () => {
-      mockUseChat.mockReturnValueOnce({
+      mockUseChat.mockReturnValue({
         ...mockUseChatReturn,
         isConnected: true,
       });
 
       render(<ChatApp />);
 
-      // Fast-forward time by 10 seconds to trigger auto-sync
+      // Fast-forward time by more than 10 seconds to trigger auto-sync
+      // (condition in code is > 10000, not >= 10000)
       await act(async () => {
-        jest.advanceTimersByTime(10000);
+        jest.advanceTimersByTime(20001);
       });
 
       await waitFor(() => {
@@ -421,12 +425,20 @@ describe('Chat Component', () => {
     });
 
     test('cleans up sync interval on unmount', async () => {
-      mockUseChat.mockReturnValueOnce({
+      mockUseChat.mockReturnValue({
         ...mockUseChatReturn,
         isConnected: true,
       });
 
       const { unmount } = render(<ChatApp />);
+
+      // Trigger one sync before unmounting
+      await act(async () => {
+        jest.advanceTimersByTime(20001);
+      });
+
+      const callCountBeforeUnmount = mockFetchInitialMessages.mock.calls.length;
+      expect(callCountBeforeUnmount).toBeGreaterThan(0);
 
       unmount();
 
@@ -435,8 +447,8 @@ describe('Chat Component', () => {
         jest.advanceTimersByTime(20000);
       });
 
-      // fetchInitialMessages should only be called during initial mount
-      expect(mockFetchInitialMessages).toHaveBeenCalledTimes(1);
+      // fetchInitialMessages should not be called again after unmount
+      expect(mockFetchInitialMessages).toHaveBeenCalledTimes(callCountBeforeUnmount);
     });
   });
 
