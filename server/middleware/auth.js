@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
 const TokenBlacklist = require("../models/tokenBlacklist"); // ISSUE-010: Token invalidation
+const ActiveSession = require("../models/activeSession"); // Session tracking
 const logger = require("../utils/logger");
 
 // Middleware to verify JWT token
@@ -38,6 +39,21 @@ const auth = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({ message: "User not found" });
     }
+
+    // SECURITY ENHANCEMENT: Check if session is active
+    const isSessionActive = await ActiveSession.isSessionActive(token);
+    if (!isSessionActive) {
+      logger.auth.warn("Inactive session used", {
+        userId: decoded.id,
+        tokenPrefix: token.substring(0, 10) + "...",
+      });
+      return res.status(401).json({
+        message: "Session expired or invalid. Please login again.",
+      });
+    }
+
+    // Update session activity timestamp
+    await ActiveSession.updateActivity(token);
 
     // Attach user object and token to request
     req.user = user;
