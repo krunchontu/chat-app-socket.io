@@ -1,6 +1,7 @@
 const http = require("http");
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet"); // SECURITY: HTTP security headers
 const mongoSanitize = require("express-mongo-sanitize"); // SECURITY: NoSQL injection protection
 require("dotenv").config(); // Load environment variables from .env file
 const { Server } = require("socket.io"); // Updated import
@@ -114,6 +115,60 @@ logger.api.info("CORS configuration loaded", {
   methods: corsOptions.methods,
   credentials: corsOptions.credentials,
 });
+
+// SECURITY: Apply Helmet.js for comprehensive security headers
+app.use(
+  helmet({
+    // Content Security Policy (CSP) - Prevents XSS attacks
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"], // Allow inline scripts for Swagger UI
+        styleSrc: ["'self'", "'unsafe-inline'"], // Allow inline styles for Swagger UI
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'", "https://chat-app-frontend-hgqg.onrender.com", "http://localhost:3000"],
+        fontSrc: ["'self'", "data:"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+      },
+    },
+    // Strict Transport Security (HSTS) - Forces HTTPS
+    hsts: {
+      maxAge: 31536000, // 1 year
+      includeSubDomains: true,
+      preload: true,
+    },
+    // Prevents clickjacking attacks
+    frameguard: {
+      action: "deny",
+    },
+    // Prevents MIME type sniffing
+    noSniff: true,
+    // Disables X-Powered-By header
+    hidePoweredBy: true,
+    // Prevents browsers from sending referrer information
+    referrerPolicy: {
+      policy: "strict-origin-when-cross-origin",
+    },
+    // Prevents DNS prefetching
+    dnsPrefetchControl: {
+      allow: false,
+    },
+    // Prevents IE from executing downloads in site context
+    ieNoOpen: true,
+    // XSS filter for older browsers
+    xssFilter: true,
+  })
+);
+
+logger.api.info("Security headers configured", {
+  csp: "enabled",
+  hsts: "enabled",
+  frameguard: "deny",
+  xssFilter: "enabled",
+});
+
 app.use(express.json()); // Parse JSON bodies
 
 // SECURITY FIX (ISSUE-020): MongoDB injection protection

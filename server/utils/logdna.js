@@ -1,4 +1,4 @@
-const { createLogger } = require("logdna");
+const { Logger } = require("@logdna/logger");
 const os = require("os");
 
 // Initialize LogDNA Logger
@@ -15,16 +15,16 @@ const initializeLogger = () => {
     };
   }
 
-  // Create a real LogDNA logger
+  // Create a real LogDNA logger with the new API
   const options = {
     app: "chat-app-backend",
     hostname: os.hostname(),
-    index_meta: true,
+    indexMeta: true,
     tags: ["nodejs", "express", "socket.io", "chat-app"],
     env: process.env.NODE_ENV || "development",
   };
 
-  const logger = createLogger(process.env.LOGDNA_KEY, options);
+  const logger = new Logger(process.env.LOGDNA_KEY, options);
 
   // Enhance the logger with standard methods
   return {
